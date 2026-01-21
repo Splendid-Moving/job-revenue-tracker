@@ -1,6 +1,13 @@
 from datetime import datetime, timedelta, timezone
 from services.auth import get_service
 import config
+from zoneinfo import ZoneInfo
+
+# Color to source mapping
+COLOR_SOURCE_MAP = {
+    '6': 'Yelp',        # #ffb878 (orange)
+    '2': 'Google LSA',  # #7ae7bf (teal/mint)
+}
 
 def get_color_hex(service, color_id):
     """Get hex color code for a given color ID"""
@@ -12,13 +19,14 @@ def get_color_hex(service, color_id):
 
 def get_todays_jobs():
     """
-    Fetches events from the primary calendar for the current day.
+    Fetches events from the primary calendar for the current day (Los Angeles time).
     Returns a list of simplified event objects with source information.
     """
     service = get_service('calendar', 'v3')
 
-    # Calculate time range for "Today"
-    today = datetime.now() 
+    # Get current time in Los Angeles timezone
+    la_tz = ZoneInfo('America/Los_Angeles')
+    today = datetime.now(la_tz)
     start_of_day = today.replace(hour=0, minute=0, second=0, microsecond=0)
     end_of_day = today.replace(hour=23, minute=59, second=59, microsecond=999999)
     
