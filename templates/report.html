@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Moving Report - {{ date }}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: #f4f4f9;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        .job-card {
+            background: #fafafa;
+            border: 1px solid #eee;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+        }
+
+        .job-title {
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 5px;
+            color: #2c3e50;
+        }
+
+        .job-meta {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 15px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        button {
+            background: #27ae60;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1em;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        button:hover {
+            background: #219150;
+        }
+
+        .source-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-top: 5px;
+        }
+
+        .source-yelp {
+            background: #ffe5d9;
+            color: #d35400;
+        }
+
+        .source-google-lsa {
+            background: #d4f4dd;
+            color: #27ae60;
+        }
+
+        .source-other {
+            background: #e8e8e8;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1>Daily Job Report: {{ date }}</h1>
+
+        {% if jobs %}
+        <form action="/submit" method="POST">
+            {% for job in jobs %}
+            <div class="job-card">
+                <div class="job-title">{{ job.summary }}</div>
+                <div class="job-meta">
+                    ID: {{ job.id }} | Time: {{ job.start }} <br>
+                    Location: {{ job.location }}
+                    {% if job.source %}
+                    <br>
+                    <span class="source-badge source-{{ job.source|lower|replace(' ', '-') }}">
+                        Source: {{ job.source }}
+                    </span>
+                    {% endif %}
+                </div>
+
+                <!-- Hidden inputs -->
+                <input type="hidden" name="job_id" value="{{ job.id }}">
+                <input type="hidden" name="summary_{{ job.id }}" value="{{ job.summary }}">
+                <input type="hidden" name="source_{{ job.id }}" value="{{ job.source }}">
+
+                <div class="form-group">
+                    <label>Did the move happen?</label>
+                    <select name="status_{{ job.id }}" required>
+                        <option value="Yes">Yes</option>
+                        <option value="Cancelled">Cancelled</option>
+                        <option value="Rescheduled">Rescheduled</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Total Revenue ($)</label>
+                    <input type="number" step="0.01" name="total_{{ job.id }}" placeholder="0.00" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Net Revenue ($)</label>
+                    <input type="number" step="0.01" name="net_{{ job.id }}" placeholder="0.00" required>
+                </div>
+            </div>
+            {% endfor %}
+
+            <button type="submit">Submit Report</button>
+        </form>
+        {% else %}
+        <p>No moving jobs found for today.</p>
+        {% endif %}
+    </div>
+
+    <script>
+        // Input validation
+        document.addEventListener('DOMContentLoaded', function () {
+            const form = document.querySelector('form');
+
+            if (form) {
+                form.addEventListener('submit', function (e) {
+                    let isValid = true;
+                    const errors = [];
+
+                    // Validate all revenue inputs
+                    const revenueInputs = form.querySelectorAll('input[type="number"]');
+                    revenueInputs.forEach(input => {
+                        const value = parseFloat(input.value);
+
+                        // Check if empty
+                        if (!input.value || input.value.trim() === '') {
+                            errors.push(`${input.previousElementSibling.textContent} is required`);
+                            input.style.borderColor = 'red';
+                            isValid = false;
+                        }
+                        // Check if negative
+                        else if (value < 0) {
+                            errors.push(`${input.previousElementSibling.textContent} cannot be negative`);
+                            input.style.borderColor = 'red';
+                            isValid = false;
+                        }
+                        // Check if reasonable (less than $100k)
+                        else if (value > 100000) {
+                            if (!confirm(`${input.previousElementSibling.textContent} is $${value.toLocaleString()}. Is this correct?`)) {
+                                isValid = false;
+                            }
+                        }
+                        else {
+                            input.style.borderColor = '#ddd';
+                        }
+                    });
+
+                    if (!isValid) {
+                        e.preventDefault();
+                        alert('Please fix the following errors:\\n\\n' + errors.join('\\n'));
+                    }
+                });
+
+                // Real-time validation feedback
+                const numberInputs = form.querySelectorAll('input[type="number"]');
+                numberInputs.forEach(input => {
+                    input.addEventListener('input', function () {
+                        const value = parseFloat(this.value);
+                        if (this.value && value < 0) {
+                            this.style.borderColor = 'red';
+                        } else {
+                            this.style.borderColor = '#ddd';
+                        }
+                    });
+                });
+            }
+        });
+    </script>
+
+</body>
+
+</html>
