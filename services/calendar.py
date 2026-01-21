@@ -30,10 +30,10 @@ def get_todays_jobs():
     start_of_day = today.replace(hour=0, minute=0, second=0, microsecond=0)
     end_of_day = today.replace(hour=23, minute=59, second=59, microsecond=999999)
     
-    # Format to RFC3339
-    time_min = start_of_day.isoformat() + 'Z'
-    time_max = end_of_day.isoformat() + 'Z'
-
+    # Convert to UTC for API (Google Calendar API expects UTC)
+    time_min = start_of_day.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+    time_max = end_of_day.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+    
     print(f"Fetching events from {time_min} to {time_max}...")
 
     events_result = service.events().list(
