@@ -24,8 +24,7 @@ This system automates the daily workflow of tracking revenue for moving jobs:
          │
          ▼
 ┌─────────────────┐
-│   Flask App     │ ──> Generate HTML form
-│ (localhost:5001)│
+│ GitHub Actions  │ ──> Automation Trigger (6 PM)
 └─────────────────┘
          │
          ▼
@@ -35,7 +34,8 @@ This system automates the daily workflow of tracking revenue for moving jobs:
          │
          ▼
 ┌─────────────────┐
-│ User fills form │
+│    Railway      │ ──> Hosting the Web Form
+│ (Production URL)│
 └─────────────────┘
          │
          ▼
@@ -87,30 +87,16 @@ This system automates the daily workflow of tracking revenue for moving jobs:
 
 ---
 
-## 🚀 Daily Usage
+## 🚀 Daily Workflow
 
-### Step 1: Start the Form Server
-```bash
-cd /Users/nikti/Desktop/Projects/splendid_moving/job_form_automation
-python3 app.py
-```
-- Server runs on: http://localhost:5001/
-- Keep this terminal window open
+The system is now **100% automated**.
 
-### Step 2: Send Daily Notification
-```bash
-# In a new terminal window
-python3 send_email.py
-```
-- Fetches today's jobs
-- Sends email to `info@splendidmoving.com`
-- Email contains link to form
+1. **Wait for the Email**: Every day at **6:00 PM**, you will receive an email from `info@splendidmoving.com`.
+2. **Click the Link**: Open the link in the email (works on phone or computer).
+3. **Submit Report**: Verify the job details, enter revenue numbers, and click Submit.
+4. **Done!**: Data is instantly saved to the Google Sheet.
 
-### Step 3: Fill Out Form
-- Click link in email
-- Form shows all jobs for today
-- Submit revenue data
-- Data automatically saves to Google Sheets
+*(You do not need to run any code or keep your computer on)*
 
 ---
 
@@ -294,13 +280,12 @@ Edit `send_email.py` - modify `html_body` variable
 
 ## ✅ Quick Start Checklist
 
-- [ ] Service Account has calendar access
-- [ ] Service Account has sheet access
-- [ ] `.env` file created with SMTP credentials
-- [ ] `python3 app.py` running
-- [ ] Test email sent successfully
-- [ ] Form accessible at http://localhost:5001/
-- [ ] Test submission saved to Google Sheets
+- [x] Service Account has calendar access
+- [x] Service Account has sheet access
+- [x] GitHub Secrets configured (SMTP, Service Account, Base URL)
+- [x] GitHub Actions workflow active
+- [x] Railway App deployed and running
+- [x] Test submission saved to Google Sheets
 
 ---
 
