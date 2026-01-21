@@ -195,85 +195,35 @@ TARGET_EMAIL = 'info@splendidmoving.com'
 
 ---
 
-## 🔄 Automation Options
+## 🏗 System Architecture
 
-### **Current Setup: GitHub Actions (Recommended)**
+This project uses a **Hybrid Architecture** for maximum reliability and zero maintenance.
 
-The system uses **GitHub Actions** to automatically send the daily email at 6 PM Los Angeles time.
+### 1. The Web App (Railway)
+*   **Status**: 🟢 Online 24/7
+*   **URL**: `https://web-production-755dc.up.railway.app`
+*   **Purpose**: Hosts the actual form you fill out.
+*   **Why Railway?**: It gives us a permanent, secure URL accessible from any device (phone or laptop), so you don't need your computer running to submit data.
 
-#### **How It Works:**
-
-```
-Every day at 6 PM LA time:
-┌─────────────────────────────────────┐
-│  GitHub Actions (Free)              │
-│  - Runs on GitHub's servers         │
-│  - No computer needs to be on       │
-│  - Completely automated              │
-└─────────────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────────┐
-│  send_email.py                      │
-│  - Fetches today's jobs             │
-│  - Sends email notification         │
-└─────────────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────────┐
-│  Email to info@splendidmoving.com   │
-│  - Contains form link               │
-│  - Click to fill out revenue data   │
-└─────────────────────────────────────┘
-```
-
-#### **What Was Set Up:**
-
-1. **Workflow File**: `.github/workflows/daily-email.yml`
-   - Defines the automation schedule
-   - Cron: `0 2 * * *` (2 AM UTC = 6 PM PST)
-   - Installs dependencies and runs `send_email.py`
-
-2. **GitHub Secrets**: Environment variables stored securely
-   - `SERVICE_ACCOUNT_JSON` - Google Service Account credentials
-   - `SMTP_EMAIL` - Email address for sending
-   - `SMTP_PASSWORD` - Gmail App Password
-   - `BASE_URL` - URL to the form (localhost or Railway)
-
-3. **Timezone Handling**: Uses Los Angeles timezone
-   - `zoneinfo` library for accurate timezone conversion
-   - Ensures correct "today" regardless of server location
-
-#### **Monitoring & Testing:**
-
-- **View runs**: https://github.com/Splendid-Moving/job-revenue-tracker/actions
-- **Manual trigger**: Click "Run workflow" to test anytime
-- **Logs**: Full execution logs available for debugging
-
-#### **Why GitHub Actions?**
-
-✅ **Free** - Unlimited for public repos, generous free tier for private  
-✅ **Reliable** - Runs on GitHub's infrastructure  
-✅ **No maintenance** - No server to manage  
-✅ **Timezone aware** - Handles PST/PDT automatically  
-✅ **Logs** - Full visibility into each run  
+### 2. The Automation (GitHub Actions)
+*   **Status**: 🟢 Runs Daily @ 6 PM (LA Time)
+*   **Purpose**: The "Alarm Clock" that wakes up, checks Google Calendar for jobs, and emails you the link.
+*   **Why GitHub Actions?**: 
+    1. **Reliability**: It runs on GitHub's servers, so it works even if your computer is off or sleeping.
+    2. **Cost**: It is completely free for this usage.
+    3. **Separation**: It keeps the "trigger" separate from the "website", ensuring the email sends even if the website were momentarily restarting.
 
 ---
 
-### Option 2: Manual Daily Run
-Run `send_email.py` manually each morning
+## 🔄 How It Works Daily
 
-### Option 3: Cron Job (Mac/Linux)
-```bash
-# Edit crontab
-crontab -e
+1. **6:00 PM**: GitHub Actions starts up.
+2. It fetches jobs from **Google Calendar** (using "Los Angeles" timezone).
+3. It sends an email to `info@splendidmoving.com` with the **Railway Link**.
+4. You click the link, fill out the revenue, and click **Submit**.
+5. Data is securely saved to **Google Sheets**.
 
-# Add this line (runs at 6 PM daily)
-0 18 * * * cd /Users/nikti/Desktop/Projects/splendid_moving/job_form_automation && /usr/local/bin/python3 send_email.py
-```
-
-### Option 4: Deploy to Server
-Deploy `app.py` to a cloud server (Heroku, Railway, etc.) so it's always accessible
+---
 
 ---
 
