@@ -18,8 +18,18 @@ def main():
         log_info(f"Found {len(jobs)} jobs for today")
         print(f"Found {len(jobs)} jobs.")
         
+        # Get today's date string for the URL
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        la_tz = ZoneInfo('America/Los_Angeles')
+        today_str = datetime.now(la_tz).strftime("%Y-%m-%d")
+        
         # URL to the Flask app (from environment variable or localhost)
-        report_url = os.getenv('BASE_URL', 'http://localhost:5001/')
+        base_url = os.getenv('BASE_URL', 'http://localhost:5001/')
+        if base_url.endswith('/'):
+            report_url = f"{base_url}?date={today_str}"
+        else:
+            report_url = f"{base_url}/?date={today_str}"
         
         # Send via SMTP email
         subject = f"ACTION REQUIRED: Daily Job Report - {len(jobs)} Jobs"

@@ -11,10 +11,19 @@ app = Flask(__name__)
 def index():
     try:
         log_info("Form page accessed")
-        # Fetch today's jobs
-        # Note: get_todays_jobs currently fetches events for "Today" (or debug window)
-        jobs = get_todays_jobs()
-        date_str = datetime.now().strftime("%Y-%m-%d")
+        
+        # Check for date query parameter (YYYY-MM-DD)
+        date_param = request.args.get('date')
+        
+        if date_param:
+            date_str = date_param
+            log_info(f"Using requested date: {date_str}")
+        else:
+            date_str = datetime.now().strftime("%Y-%m-%d")
+            
+        # Fetch jobs for the specific date
+        jobs = get_todays_jobs(date_str)
+        
         log_info(f"Loaded {len(jobs)} jobs for {date_str}")
         return render_template('report.html', jobs=jobs, date=date_str)
     except Exception as e:
