@@ -1,0 +1,36 @@
+name: Daily Job Report Email
+
+on:
+  schedule:
+    # Runs at 6 PM Los Angeles time (PST/PDT)
+    # 6 PM PST = 2 AM UTC (next day)
+    # 6 PM PDT = 1 AM UTC (next day)
+    # Using 2 AM UTC to cover PST (will be 6 PM PST, 7 PM PDT)
+    - cron: '0 2 * * *'
+  workflow_dispatch: # Allows manual trigger for testing
+
+jobs:
+  send-daily-email:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+    
+    - name: Send daily email notification
+      env:
+        SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
+        SMTP_EMAIL: ${{ secrets.SMTP_EMAIL }}
+        SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        BASE_URL: ${{ secrets.BASE_URL }}
+      run: |
+        python3 send_email.py
