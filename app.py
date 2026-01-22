@@ -23,9 +23,9 @@ def index():
             
         log_info(f"Checking for existing submission for {date_str}")
         
-        # Check against Google Sheets to prevent duplicates
+        # Check against Google Sheets to prevent duplicates (unless force=true)
         sheets = SheetsService()
-        if sheets.check_date_exists(date_str):
+        if not request.args.get('force') and sheets.check_date_exists(date_str):
             log_warning(f"Duplicate submission attempted for {date_str}")
             return render_template('already_submitted.html', date=date_str)
 
