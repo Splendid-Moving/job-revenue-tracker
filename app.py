@@ -21,6 +21,14 @@ def index():
         else:
             date_str = datetime.now().strftime("%Y-%m-%d")
             
+        log_info(f"Checking for existing submission for {date_str}")
+        
+        # Check against Google Sheets to prevent duplicates
+        sheets = SheetsService()
+        if sheets.check_date_exists(date_str):
+            log_warning(f"Duplicate submission attempted for {date_str}")
+            return render_template('already_submitted.html', date=date_str)
+
         # Fetch jobs for the specific date
         jobs = get_todays_jobs(date_str)
         

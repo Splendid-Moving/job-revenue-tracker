@@ -68,4 +68,32 @@ class SheetsService:
         print(f"{result.get('updates').get('updatedCells')} cells appended to {sheet_name}.")
         return result
 
+    def check_date_exists(self, date_str):
+        """
+        Checks if the given date string exists in Column A of the current month's sheet.
+        Returns True if found, False otherwise.
+        """
+        try:
+            sheet_name = self.get_monthly_sheet_name()
+            # Ensure sheet exists first (it might not if this is the first run of the month)
+            # But checking existence is expensive if we do full ensure.
+            # Let's just try to read. If sheet doesn't exist, date definitely doesn't exist.
+            
+            # Read Column A (Dates)
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"'{sheet_name}'!A:A"
+            ).execute()
+            
+            rows = result.get('values', [])
+            # Flatten list of lists: [['Date'], ['2026-01-20'], ...] -> ['Date', '2026-01-20']
+            dates = [row[0] for row in rows if row]
+            
+            return date_str in dates
+            
+        except Exception as e:
+            # If sheet doesn't exist or other error, assume not duplicate
+            # print(f"Check date error (likely sheet not found yet): {e}")
+            return False
+
 # Singleton-ish helper if needed or just instantiate
