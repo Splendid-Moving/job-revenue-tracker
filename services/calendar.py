@@ -61,16 +61,34 @@ def get_todays_jobs(date_str=None):
     
     events = events_result.get('items', [])
     
+    import re
+    
     jobs = []
     for event in events:
         summary = event.get('summary', 'Untitled Job')
         color_id = event.get('colorId', None)
+        description = event.get('description', '')
         
-        # Determine source based on color
-        if color_id in config.COLOR_SOURCE_MAP:
-            source = config.COLOR_SOURCE_MAP[color_id]
-        else:
-            source = 'Other'
+        source = None
+        
+        # 1. Try to parse from Description (New Method)
+        # Look for "Source: Value" (case insensitive)
+        source_match = re.search(r'Source:\s*(.*)', description, re.IGNORECASE)
+        if source_match:
+            source_val = source_match.group(1).strip().lower()
+            if 'yelp' in source_val:
+                source = 'Yelp'
+            elif 'local service' in source_val or 'lsa' in source_val:
+                source = 'Google LSA'
+            else:
+                source = 'Other'
+                
+        # 2. Fallback to Color (Legacy Method)
+        if not source:
+            if color_id in config.COLOR_SOURCE_MAP:
+                source = config.COLOR_SOURCE_MAP[color_id]
+            else:
+                source = 'Other'
         
         jobs.append({
             'id': event['id'],
