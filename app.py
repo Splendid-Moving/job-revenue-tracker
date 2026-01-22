@@ -81,9 +81,17 @@ def submit():
             status = request.form.get(f'status_{jid}')
             total_rev = request.form.get(f'total_{jid}', '').strip()
             net_rev = request.form.get(f'net_{jid}', '').strip()
-            source = request.form.get(f'source_{jid}', 'Other')  # Get source from hidden input
-            date_val = datetime.now().strftime("%Y-%m-%d")
-            
+            # Get source (from hidden input) and Payment Type
+            source = request.form.get(f'source_{jid}', 'Other')
+            payment_type = request.form.get(f'payment_{jid}', '') 
+
+            # Fix: Use the date passed from the form (date_reported_for) 
+            # instead of datetime.now() to ensure duplicate check (check_date_exists) works correctly.
+            date_val = request.form.get('date_reported_for')
+            if not date_val:
+                log_warning("Missing date_reported_for, falling back to today")
+                date_val = datetime.now().strftime("%Y-%m-%d")
+
             # Server-side logic for conditional fields
             if status == 'Yes':
                 # Determine "Yes" means we validate and save
@@ -105,14 +113,18 @@ def submit():
                     if net_rev_float < 0:
                         log_error(f"Negative net revenue for job {jid}: {net_rev}")
                         return "Invalid data: Revenue cannot be negative", 400
-                        
+                    
+                    # Validate Payment Type
+                    if not payment_type:
+                         log_warning(f"Missing payment type for job {jid}")
+                         return "Invalid data: Payment Type is required", 400
+
                 except ValueError as e:
                     log_error(f"Invalid revenue format for job {jid}: {e}")
                     return "Invalid data: Revenue must be a number", 400
 
-                # Row: [Date, Job ID, Summary, Status, Total, Net, Submitted At, Source]
-                # Note: Swapped Source and Timestamp to match Sheet headers [Submitted At, Source]
-                row = [date_val, jid, summary, status, total_rev, net_rev, timestamp, source]
+                # Row: [Date, Job ID, Summary, Status, Total, Net, Payment, Submitted At, Source]
+                row = [date_val, jid, summary, status, total_rev, net_rev, payment_type, timestamp, source]
                 submission_data.append(row)
             
             else:

@@ -154,9 +154,21 @@
                         <label>Net Revenue ($)</label>
                         <input type="number" step="0.01" name="net_{{ job.id }}" placeholder="0.00" required>
                     </div>
+
+                    <div class="form-group">
+                        <label>Payment Type</label>
+                        <select name="payment_{{ job.id }}" required>
+                            <option value="" disabled selected>Select One</option>
+                            <option value="Card">Card</option>
+                            <option value="Cash">Cash</option>
+                        </select>
+                    </div>
                 </div>
             </div>
             {% endfor %}
+
+            <!-- Hidden field to lock the date being reported -->
+            <input type="hidden" name="date_reported_for" value="{{ date }}">
 
             <button type="submit">Submit Report</button>
         </form>
@@ -168,9 +180,10 @@
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             // Function to toggle revenue fields functionality
+            // Function to toggle revenue fields functionality
             function toggleRevenueFields(jobId, status) {
                 const section = document.getElementById(`revenue-section-${jobId}`);
-                const inputs = section.querySelectorAll('input');
+                const inputs = section.querySelectorAll('input, select'); // Selects both inputs and dropdowns
 
                 if (status === 'Yes') {
                     section.style.display = 'block';
@@ -179,7 +192,8 @@
                     section.style.display = 'none';
                     inputs.forEach(input => {
                         input.required = false;
-                        input.value = ''; // Clear value when hidden
+                        if (input.tagName === 'INPUT') input.value = '';
+                        if (input.tagName === 'SELECT') input.selectedIndex = 0;
                     });
                 }
             }

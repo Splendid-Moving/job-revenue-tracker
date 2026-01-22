@@ -33,7 +33,7 @@ class SheetsService:
             ).execute()
             
             # Optional: Add headers
-            header = ["Date", "Job ID", "Summary", "Status", "Total Revenue", "Net Revenue", "Submitted At", "Source"]
+            header = ["Date", "Job ID", "Summary", "Status", "Total Revenue", "Net Revenue", "Payment Type", "Submitted At", "Source"]
             self.service.spreadsheets().values().update(
                 spreadsheetId=self.spreadsheet_id,
                 range=f"{sheet_name}!A1",
