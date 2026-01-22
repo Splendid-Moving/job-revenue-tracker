@@ -76,33 +76,42 @@ def submit():
             source = request.form.get(f'source_{jid}', 'Other')  # Get source from hidden input
             date_val = datetime.now().strftime("%Y-%m-%d")
             
-            # Server-side validation
-            try:
-                # Validate total revenue
-                if not total_rev:
-                    log_warning(f"Missing total revenue for job {jid}")
-                    total_rev = "0"
-                total_rev_float = float(total_rev)
-                if total_rev_float < 0:
-                    log_error(f"Negative total revenue for job {jid}: {total_rev}")
-                    return "Invalid data: Revenue cannot be negative", 400
-                
-                # Validate net revenue
-                if not net_rev:
-                    log_warning(f"Missing net revenue for job {jid}")
-                    net_rev = "0"
-                net_rev_float = float(net_rev)
-                if net_rev_float < 0:
-                    log_error(f"Negative net revenue for job {jid}: {net_rev}")
-                    return "Invalid data: Revenue cannot be negative", 400
+            # Server-side logic for conditional fields
+            if status == 'Yes':
+                # Determine "Yes" means we validate and save
+                try:
+                    # Validate total revenue
+                    if not total_rev:
+                        log_warning(f"Missing total revenue for job {jid}")
+                        total_rev = "0"
+                    total_rev_float = float(total_rev)
+                    if total_rev_float < 0:
+                        log_error(f"Negative total revenue for job {jid}: {total_rev}")
+                        return "Invalid data: Revenue cannot be negative", 400
                     
-            except ValueError as e:
-                log_error(f"Invalid revenue format for job {jid}: {e}")
-                return "Invalid data: Revenue must be a number", 400
+                    # Validate net revenue
+                    if not net_rev:
+                        log_warning(f"Missing net revenue for job {jid}")
+                        net_rev = "0"
+                    net_rev_float = float(net_rev)
+                    if net_rev_float < 0:
+                        log_error(f"Negative net revenue for job {jid}: {net_rev}")
+                        return "Invalid data: Revenue cannot be negative", 400
+                        
+                except ValueError as e:
+                    log_error(f"Invalid revenue format for job {jid}: {e}")
+                    return "Invalid data: Revenue must be a number", 400
+
+                # Row: [Date, Job ID, Summary, Status, Total, Net, Source, Timestamp]
+                row = [date_val, jid, summary, status, total_rev, net_rev, source, timestamp]
+                submission_data.append(row)
             
-            # Row: [Date, Job ID, Summary, Status, Total, Net, Source, Timestamp]
-            row = [date_val, jid, summary, status, total_rev, net_rev, source, timestamp]
-            submission_data.append(row)
+            else:
+                # Status is Cancelled/Rescheduled/Other
+                # We do NOT save to sheets (as requested) or we save with 0?
+                # User request: "only add the jobs to the google sheets, if it was marked yes."
+                log_info(f"Skipping job {jid} (Status: {status})")
+                pass
             
         # Write to Sheets
         if submission_data:
