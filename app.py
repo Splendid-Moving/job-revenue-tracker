@@ -110,8 +110,9 @@ def submit():
                     log_error(f"Invalid revenue format for job {jid}: {e}")
                     return "Invalid data: Revenue must be a number", 400
 
-                # Row: [Date, Job ID, Summary, Status, Total, Net, Source, Timestamp]
-                row = [date_val, jid, summary, status, total_rev, net_rev, source, timestamp]
+                # Row: [Date, Job ID, Summary, Status, Total, Net, Submitted At, Source]
+                # Note: Swapped Source and Timestamp to match Sheet headers [Submitted At, Source]
+                row = [date_val, jid, summary, status, total_rev, net_rev, timestamp, source]
                 submission_data.append(row)
             
             else:
