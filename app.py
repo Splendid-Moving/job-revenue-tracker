@@ -128,4 +128,56 @@ if __name__ == '__main__':
     port = int(os.getenv('PORT', 5001))
     debug_mode = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
     
+    # Start the scheduler locally
+    # Note: In production (Gunicorn), the scheduler is started by the code above `if __name__`
+    # But we need to ensure it runs. 
+    # Actually, putting it in global scope (outside if main) ensures it runs in Gunicorn too.
+    
     app.run(debug=debug_mode, host='0.0.0.0', port=port, use_reloader=False)
+
+# Scheduler Setup (Global Scope to run in Gunicorn)
+from apscheduler.schedulers.background import BackgroundScheduler
+from zoneinfo import ZoneInfo
+from send_email import main as send_email_job
+
+def start_scheduler():
+    try:
+        # Check if scheduler is already running or if we are in a reloader child process to avoid double run
+        if os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+            return
+
+        scheduler = BackgroundScheduler()
+        
+        # Determine strict timezone
+        la_tz = ZoneInfo('America/Los_Angeles')
+        
+        # Add job: Daily at 6:00 PM LA time
+        scheduler.add_job(
+            send_email_job, 
+            'cron', 
+            hour=18, 
+            minute=0, 
+            timezone=la_tz,
+            id='daily_email_job',
+            replace_existing=True
+        )
+        
+        scheduler.start()
+        log_info("✅ Internal Scheduler Started: Daily email scheduled for 6:00 PM PST")
+        
+        # Print next run time for verification
+        jobs = scheduler.get_jobs()
+        if jobs:
+            print(f"Next scheduled run: {jobs[0].next_run_time}")
+            
+    except Exception as e:
+        log_error(f"Failed to start scheduler: {e}")
+
+# Start the scheduler immediately on import
+# We use a primitive check to ensure we are not in a build step or similar
+if os.environ.get('RAILWAY_STATIC_URL') or os.environ.get('RAILWAY_ENVIRONMENT'):
+   # We are likely in production
+   start_scheduler()
+else:
+   # Local development - start it too
+   start_scheduler()
