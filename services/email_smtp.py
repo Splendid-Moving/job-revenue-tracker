@@ -35,14 +35,9 @@ def send_email_smtp(to_email, subject, body_html, body_text=None):
     # Add HTML version
     msg.attach(MIMEText(body_html, 'html'))
     
-    try:
-        # Connect to Gmail SMTP server
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-            server.login(smtp_email, smtp_password)
-            server.send_message(msg)
-            print(f"✓ Email sent successfully to {to_email}")
-            return True
-            
-    except Exception as e:
-        print(f"✗ Error sending email: {e}")
-        return False
+    # Connect to Gmail SMTP server
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+        server.login(smtp_email, smtp_password)
+        server.send_message(msg)
+        print(f"✓ Email sent successfully to {to_email}")
+        return True

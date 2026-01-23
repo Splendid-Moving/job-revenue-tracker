@@ -57,20 +57,33 @@ def main():
         
         text_body = f"Daily Job Report - {len(jobs)} Jobs\n\nPlease fill out the report: {report_url}"
         
-        try:
-            send_email_smtp(
-                to_email=os.getenv('SMTP_EMAIL', 'info@splendidmoving.com'),
-                subject=subject,
-                body_html=html_body,
-                body_text=text_body
-            )
-            log_info("Email sent successfully via SMTP")
-            print("✓ Email sent successfully!")
-        except Exception as e:
-            log_error(f"Failed to send email via SMTP: {str(e)}", exc_info=True)
-            print(f"✗ Error sending email: {e}")
-            print(f"Fallback: Open this link manually:")
-            print(f"\n---> {report_url} <---")
+        import time
+        max_retries = 3
+        retry_delay = 5  # seconds
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                log_info(f"Sending email (Attempt {attempt}/{max_retries})...")
+                send_email_smtp(
+                    to_email=os.getenv('SMTP_EMAIL', 'info@splendidmoving.com'),
+                    subject=subject,
+                    body_html=html_body,
+                    body_text=text_body
+                )
+                log_info("Email sent successfully via SMTP")
+                print("✓ Email sent successfully!")
+                break # Success, exit loop
+            except Exception as e:
+                log_error(f"Attempt {attempt} failed: {str(e)}")
+                if attempt < max_retries:
+                    log_info(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                else:
+                    log_error(f"All {max_retries} attempts failed.", exc_info=True)
+                    print(f"✗ Error sending email after {max_retries} attempts: {e}")
+                    print(f"Fallback: Open this link manually:")
+                    print(f"\n---> {report_url} <---")
+                    raise # Re-raise to alert scheduler
                 
     except Exception as e:
         log_error(f"Fatal error in notification process: {str(e)}", exc_info=True)
