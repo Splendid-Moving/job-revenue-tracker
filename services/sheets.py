@@ -66,7 +66,64 @@ class SheetsService:
         ).execute()
         
         print(f"{result.get('updates').get('updatedCells')} cells appended to {sheet_name}.")
+        
+        # After appending, update the dashboard
+        self.ensure_dashboard_sheet()
+        
         return result
+
+    def ensure_dashboard_sheet(self):
+        """
+        Creates/Updates a 'Summary' sheet with a dynamic dashboard formula.
+        """
+        try:
+            dashboard_name = "Summary"
+            spreadsheet = self.service.spreadsheets().get(spreadsheetId=self.spreadsheet_id).execute()
+            existing_sheets = [s['properties']['title'] for s in spreadsheet.get('sheets', [])]
+            
+            if dashboard_name not in existing_sheets:
+                body = {
+                    'requests': [{
+                        'addSheet': {
+                            'properties': {
+                                'title': dashboard_name,
+                                'index': 0 # Make it the first tab
+                            }
+                        }
+                    }]
+                }
+                self.service.spreadsheets().batchUpdate(
+                    spreadsheetId=self.spreadsheet_id, 
+                    body=body
+                ).execute()
+
+            # Update Formulas for the current month
+            current_month = self.get_monthly_sheet_name()
+            
+            # Dashboard Title
+            title = [[f"Monthly Revenue Breakdown ({current_month})"], []]
+            
+            # The QUERY formula aggregates by Source (Col I) where Status (Col D) is 'Yes'
+            # A=1, B=2, C=3, D=4, E=5, F=6, G=7, H=8, I=9
+            formula = f"=QUERY('{current_month}'!A:I, \"select I, sum(E), sum(F) where D = 'Yes' group by I label I 'Source', sum(E) 'Total Revenue', sum(F) 'Net Revenue'\", 1)"
+            
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{dashboard_name}!A1",
+                valueInputOption='USER_ENTERED',
+                body={'values': title}
+            ).execute()
+
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{dashboard_name}!A3",
+                valueInputOption='USER_ENTERED',
+                body={'values': [[formula]]}
+            ).execute()
+            
+        except Exception as e:
+            from utils.logger import log_error
+            log_error(f"Error updating dashboard: {e}")
 
     def check_date_exists(self, date_str):
         """

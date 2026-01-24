@@ -170,6 +170,25 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from zoneinfo import ZoneInfo
 from send_email import main as send_email_job
 
+def send_reminder_job():
+    """
+    Check if a submission exists for today at 9:00 PM. 
+    If not, send a reminder email.
+    """
+    try:
+        from zoneinfo import ZoneInfo
+        la_tz = ZoneInfo('America/Los_Angeles')
+        today_str = datetime.now(la_tz).strftime("%Y-%m-%d")
+        
+        sheets = SheetsService()
+        if not sheets.check_date_exists(today_str):
+            log_info(f"Report for {today_str} missing at 9:00 PM. Sending reminder.")
+            send_email_job(is_reminder=True)
+        else:
+            log_info(f"Report for {today_str} already submitted. Skipping reminder.")
+    except Exception as e:
+        log_error(f"Error in send_reminder_job: {e}")
+
 def start_scheduler():
     try:
         # Check if scheduler is already running or if we are in a reloader child process to avoid double run
@@ -191,9 +210,20 @@ def start_scheduler():
             id='daily_email_job',
             replace_existing=True
         )
+
+        # Add job: Daily at 9:00 PM LA time (Reminder)
+        scheduler.add_job(
+            send_reminder_job,
+            'cron', 
+            hour=21, 
+            minute=0, 
+            timezone=la_tz,
+            id='reminder_email_job',
+            replace_existing=True
+        )
         
         scheduler.start()
-        log_info("✅ Internal Scheduler Started: Daily email scheduled for 6:00 PM PST")
+        log_info("✅ Internal Scheduler Started: Daily at 6PM and Reminder at 9PM PST")
         
         # Print next run time for verification
         jobs = scheduler.get_jobs()

@@ -4,9 +4,9 @@ from services.email_smtp import send_email_smtp
 import os
 from utils.logger import log_info, log_error
 
-def main():
+def main(is_reminder=False):
     try:
-        log_info("Starting daily notification process")
+        log_info("Starting daily notification process" + (" (REMINDER)" if is_reminder else ""))
         print("Checking for jobs...")
         jobs = get_todays_jobs()
         
@@ -25,14 +25,17 @@ def main():
         today_str = datetime.now(la_tz).strftime("%Y-%m-%d")
         
         # URL to the Flask app (from environment variable or localhost)
-        base_url = os.getenv('BASE_URL', 'http://localhost:5001/')
+        base_url = os.getenv('BASE_URL', 'https://web-production-755dc.up.railway.app')
         if base_url.endswith('/'):
             report_url = f"{base_url}?date={today_str}"
         else:
             report_url = f"{base_url}/?date={today_str}"
         
         # Send via SMTP email
-        subject = f"ACTION REQUIRED: Daily Job Report - {len(jobs)} Jobs"
+        if is_reminder:
+            subject = f"⚠️ REMINDER: Missing Daily Job Report - {len(jobs)} Jobs"
+        else:
+            subject = f"ACTION REQUIRED: Daily Job Report - {len(jobs)} Jobs"
         
         # Create HTML email body
         html_body = f"""
