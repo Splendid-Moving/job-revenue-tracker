@@ -15,21 +15,20 @@ def get_creds():
             # Load from environment variable (Railway)
             service_account_info = json.loads(os.getenv('SERVICE_ACCOUNT_JSON'))
             
-            # Fix: Handle newline characters in private key that might be escaped
+            # Aggressive Repair: Handle one-line, escaped, or truncated keys
             if 'private_key' in service_account_info:
                 pk = service_account_info['private_key']
-                print(f"DEBUG: Private Key Length: {len(pk)}")
-                print(f"DEBUG: Starts with Header? {pk.startswith('-----BEGIN PRIVATE KEY-----')}")
-                print(f"DEBUG: Ends with Footer? {pk.endswith('-----END PRIVATE KEY-----')}")
-                print(f"DEBUG: Contains real newline? {'\\n' in pk}")
-                print(f"DEBUG: Contains literal slash-n? {'\\\\n' in pk}")
-                print(f"DEBUG: First 50 chars: {pk[:50]}...")
                 
-                # Attempt aggressive unescaping if standard replace didn't work
-                if '\\n' in pk:
-                    print("DEBUG: Replacing literal \\n with real newline")
-                    service_account_info['private_key'] = pk.replace('\\n', '\n')
+                # 1. Strip headers, footers, and whitespace
+                clean_key = pk.replace('-----BEGIN PRIVATE KEY-----', '')
+                clean_key = clean_key.replace('-----END PRIVATE KEY-----', '')
+                clean_key = clean_key.replace('\\n', '').replace('\n', '').strip()
                 
+                # 2. Re-wrap with proper PEM formatting
+                # Google expects the header, the key, and the footer with newlines
+                formatted_key = f"-----BEGIN PRIVATE KEY-----\n{clean_key}\n-----END PRIVATE KEY-----\n"
+                service_account_info['private_key'] = formatted_key
+            
             creds = service_account.Credentials.from_service_account_info(
                 service_account_info, scopes=config.SCOPES)
         else:
