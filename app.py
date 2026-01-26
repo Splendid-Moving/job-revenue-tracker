@@ -36,7 +36,8 @@ def index():
         return render_template('report.html', jobs=jobs, date=date_str)
     except Exception as e:
         log_error(f"Error loading form page: {str(e)}", exc_info=True)
-        return "Error loading jobs. Please contact support.", 500
+        # Expose error for debugging
+        return f"Error loading jobs: {str(e)}", 500
 
 @app.route('/submit', methods=['POST'])
 def submit():

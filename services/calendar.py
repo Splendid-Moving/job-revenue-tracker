@@ -49,15 +49,29 @@ def get_todays_jobs(date_str=None):
     time_max = end_of_day.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
     
     print(f"Fetching events from {time_min} to {time_max}...")
-
-    events_result = service.events().list(
-        calendarId=config.CALENDAR_ID, 
-        timeMin=time_min, 
-        timeMax=time_max,
-        singleEvents=True,
-        orderBy='startTime',
-        fields='items(id,summary,start,end,location,colorId,description)'
-    ).execute()
+    
+    import time
+    events_result = {}
+    max_retries = 3
+    
+    for attempt in range(1, max_retries + 1):
+        try:
+            events_result = service.events().list(
+                calendarId=config.CALENDAR_ID, 
+                timeMin=time_min, 
+                timeMax=time_max,
+                singleEvents=True,
+                orderBy='startTime',
+                fields='items(id,summary,start,end,location,colorId,description)'
+            ).execute()
+            break # Success
+        except Exception as e:
+            if attempt < max_retries:
+                print(f"⚠️ Calendar API failed (Attempt {attempt}/{max_retries}): {e}. Retrying...")
+                time.sleep(2)
+            else:
+                print(f"❌ Calendar API failed after {max_retries} attempts.")
+                raise e
     
     events = events_result.get('items', [])
     
