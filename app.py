@@ -11,6 +11,7 @@ app = Flask(__name__)
 def index():
     try:
         log_info("Form page accessed")
+        # Trigger deployment 2026-01-26 11:35
         
         # Check for date query parameter (YYYY-MM-DD)
         date_param = request.args.get('date')
