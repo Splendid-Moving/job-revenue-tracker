@@ -22,12 +22,16 @@ def get_creds():
                 # 1. Strip headers, footers, and whitespace
                 clean_key = pk.replace('-----BEGIN PRIVATE KEY-----', '')
                 clean_key = clean_key.replace('-----END PRIVATE KEY-----', '')
-                clean_key = clean_key.replace('\\n', '').replace('\n', '').strip()
+                clean_key = clean_key.replace('\\n', '').replace('\n', '').replace('\r', '').strip()
                 
-                # 2. Re-wrap with proper PEM formatting
-                # Google expects the header, the key, and the footer with newlines
-                formatted_key = f"-----BEGIN PRIVATE KEY-----\n{clean_key}\n-----END PRIVATE KEY-----\n"
+                # 2. PEM format requires 64-character line wrapping for many parsers
+                lines = [clean_key[i:i+64] for i in range(0, len(clean_key), 64)]
+                formatted_key = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(lines) + "\n-----END PRIVATE KEY-----\n"
+                
                 service_account_info['private_key'] = formatted_key
+                
+                # Log the end for truncation check (last 10 chars)
+                print(f"DEBUG: Key Tail: ...{clean_key[-10:]}")
             
             creds = service_account.Credentials.from_service_account_info(
                 service_account_info, scopes=config.SCOPES)
