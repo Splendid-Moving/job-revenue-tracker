@@ -14,6 +14,11 @@ def get_creds():
         if os.getenv('SERVICE_ACCOUNT_JSON'):
             # Load from environment variable (Railway)
             service_account_info = json.loads(os.getenv('SERVICE_ACCOUNT_JSON'))
+            
+            # Fix: Handle newline characters in private key that might be escaped
+            if 'private_key' in service_account_info:
+                service_account_info['private_key'] = service_account_info['private_key'].replace('\\n', '\n')
+            
             creds = service_account.Credentials.from_service_account_info(
                 service_account_info, scopes=config.SCOPES)
         else:
