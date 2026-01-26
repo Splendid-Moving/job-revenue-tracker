@@ -19,32 +19,26 @@ def get_creds():
             if 'private_key' in service_account_info:
                 pk = service_account_info['private_key']
                 
-                # Debug: Show hex of first 50 chars to see what the "hidden" newlines are
-                try:
-                    hex_sample = pk[:50].encode('utf-8').hex(' ')
-                    print(f"DEBUG: Key Hex Sample: {hex_sample}")
-                except:
-                    pass
-                
-                # 1. Strip headers, footers, and ALL whitespace/escape sequences
-                # We want just the raw Base64 data
-                clean_key = pk.replace('-----BEGIN PRIVATE KEY-----', '')
-                clean_key = clean_key.replace('-----END PRIVATE KEY-----', '')
-                
-                # Remove every possible representation of a newline/space
-                for junk in ['\\n', '\n', '\r', ' ', '\t']:
+                # 1. Strip ALL junk - headers, footers, newlines, escaped newlines, quotes, and spaces
+                # This leaves us with just the naked Base64 string
+                junk_to_remove = [
+                    '-----BEGIN PRIVATE KEY-----', 
+                    '-----END PRIVATE KEY-----',
+                    '\\n', '\n', '\r', ' ', '\t', '"', "'"
+                ]
+                clean_key = pk
+                for junk in junk_to_remove:
                     clean_key = clean_key.replace(junk, '')
                 
                 clean_key = clean_key.strip()
                 
                 # 2. PEM format requires 64-character line wrapping
-                # This is a strict requirement for the 'cryptography' library
+                # Build the perfect PEM structure from the naked key
                 lines = [clean_key[i:i+64] for i in range(0, len(clean_key), 64)]
                 formatted_key = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(lines) + "\n-----END PRIVATE KEY-----\n"
                 
                 service_account_info['private_key'] = formatted_key
-                print(f"DEBUG: Repaired Key Length: {len(formatted_key)}")
-                print(f"DEBUG: Repaired Key Tail: ...{formatted_key[-30:].strip()}")
+                print(f"DEBUG: Final Key Cleaned (Length: {len(clean_key)})")
             
             creds = service_account.Credentials.from_service_account_info(
                 service_account_info, scopes=config.SCOPES)
@@ -54,7 +48,6 @@ def get_creds():
                 config.SERVICE_ACCOUNT_FILE, scopes=config.SCOPES)
         return creds
     except Exception as e:
-        # Don't log the full key in the error, just the message
         print(f"Error loading credentials: {e}")
         raise
 
