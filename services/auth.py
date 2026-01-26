@@ -13,53 +13,18 @@ def get_creds():
         # Check if running on Railway (env var set)
         raw_env = os.getenv('SERVICE_ACCOUNT_JSON')
         if raw_env:
-            # Load from environment variable (Railway)
-            data = raw_env
+            import base64
             
-            # 1. Handle double-stringification (If Railway sends it as a string-wrapped string)
-            if isinstance(data, str):
-                try:
-                    data = json.loads(data)
-                except:
-                    pass
-            
-            # 2. Handle Nesting (If user pasted the whole Railway JSON payload)
-            if isinstance(data, dict) and 'SERVICE_ACCOUNT_JSON' in data:
-                data = data['SERVICE_ACCOUNT_JSON']
-                # Try parsing again if the inner value is still stringified
-                if isinstance(data, str):
-                    try:
-                        data = json.loads(data)
-                    except:
-                        pass
-            
-            # data should now be our service_account_info dict
-            service_account_info = data
-            
-            # Aggressive Repair: Handle one-line, escaped, or truncated keys
-            if isinstance(service_account_info, dict) and 'private_key' in service_account_info:
-                pk = service_account_info['private_key']
-                
-                # 1. Strip ALL junk - headers, footers, newlines, escaped newlines, quotes, and spaces
-                # This leaves us with just the naked Base64 string
-                junk_to_remove = [
-                    '-----BEGIN PRIVATE KEY-----', 
-                    '-----END PRIVATE KEY-----',
-                    '\\n', '\n', '\r', ' ', '\t', '"', "'"
-                ]
-                clean_key = pk
-                for junk in junk_to_remove:
-                    clean_key = clean_key.replace(junk, '')
-                
-                clean_key = clean_key.strip()
-                
-                # 2. PEM format requires 64-character line wrapping
-                # Build the perfect PEM structure from the naked key
-                lines = [clean_key[i:i+64] for i in range(0, len(clean_key), 64)]
-                formatted_key = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(lines) + "\n-----END PRIVATE KEY-----\n"
-                
-                service_account_info['private_key'] = formatted_key
-                print(f"DEBUG: Final Key Cleaned (Length: {len(clean_key)})")
+            # Decode from Base64 first (solves ALL escaping/newline issues)
+            try:
+                decoded_bytes = base64.b64decode(raw_env)
+                decoded_str = decoded_bytes.decode('utf-8')
+                service_account_info = json.loads(decoded_str)
+                print("DEBUG: Successfully decoded Base64 credentials")
+            except Exception as decode_error:
+                # Fallback: try parsing as raw JSON (for backwards compatibility)
+                print(f"DEBUG: Base64 decode failed ({decode_error}), trying raw JSON...")
+                service_account_info = json.loads(raw_env)
             
             creds = service_account.Credentials.from_service_account_info(
                 service_account_info, scopes=config.SCOPES)
