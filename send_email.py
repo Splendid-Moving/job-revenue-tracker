@@ -25,6 +25,8 @@ def main(is_reminder=False):
         
         # URL to the Flask app (from environment variable or localhost)
         base_url = os.getenv('BASE_URL', 'https://web-production-755dc.up.railway.app')
+        report_url = f"{base_url}/?date={today_str}"
+        
         # Send via Make.com Webhook
         if is_reminder:
             subject = f"⚠️ REMINDER: Missing Daily Job Report - {len(jobs)} Jobs"
