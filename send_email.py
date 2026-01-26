@@ -1,6 +1,5 @@
 import requests
 from services.calendar import get_todays_jobs
-from services.email_smtp import send_email_smtp
 import os
 from utils.logger import log_info, log_error
 
@@ -26,12 +25,7 @@ def main(is_reminder=False):
         
         # URL to the Flask app (from environment variable or localhost)
         base_url = os.getenv('BASE_URL', 'https://web-production-755dc.up.railway.app')
-        if base_url.endswith('/'):
-            report_url = f"{base_url}?date={today_str}"
-        else:
-            report_url = f"{base_url}/?date={today_str}"
-        
-        # Send via SMTP email
+        # Send via Make.com Webhook
         if is_reminder:
             subject = f"⚠️ REMINDER: Missing Daily Job Report - {len(jobs)} Jobs"
         else:
@@ -58,7 +52,7 @@ def main(is_reminder=False):
         </html>
         """
         
-        text_body = f"Daily Job Report - {len(jobs)} Jobs\n\nPlease fill out the report: {report_url}"
+        webhook_url = "https://hook.us2.make.com/1i4fchxr99y4cu4ryghgfcnhhvz86c3b"
         
         import time
         max_retries = 3
@@ -66,15 +60,19 @@ def main(is_reminder=False):
 
         for attempt in range(1, max_retries + 1):
             try:
-                log_info(f"Sending email (Attempt {attempt}/{max_retries})...")
-                send_email_smtp(
-                    to_email=os.getenv('SMTP_EMAIL', 'info@splendidmoving.com'),
-                    subject=subject,
-                    body_html=html_body,
-                    body_text=text_body
-                )
-                log_info("Email sent successfully via SMTP")
-                print("✓ Email sent successfully!")
+                log_info(f"Sending email metadata to Make.com (Attempt {attempt}/{max_retries})...")
+                
+                payload = {
+                    "subject": subject,
+                    "body": html_body,
+                    "to_email": os.getenv('SMTP_EMAIL', 'info@splendidmoving.com') # Pass recipient just in case webhook needs it
+                }
+                
+                response = requests.post(webhook_url, json=payload, timeout=10)
+                response.raise_for_status()
+                
+                log_info("Email trigger sent successfully to Make.com")
+                print("✓ Email trigger sent successfully!")
                 break # Success, exit loop
             except Exception as e:
                 log_error(f"Attempt {attempt} failed: {str(e)}")
@@ -83,9 +81,7 @@ def main(is_reminder=False):
                     time.sleep(retry_delay)
                 else:
                     log_error(f"All {max_retries} attempts failed.", exc_info=True)
-                    print(f"✗ Error sending email after {max_retries} attempts: {e}")
-                    print(f"Fallback: Open this link manually:")
-                    print(f"\n---> {report_url} <---")
+                    print(f"✗ Error sending webhook after {max_retries} attempts: {e}")
                     raise # Re-raise to alert scheduler
                 
     except Exception as e:
