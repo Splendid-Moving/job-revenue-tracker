@@ -11,12 +11,33 @@ def get_creds():
     """
     try:
         # Check if running on Railway (env var set)
-        if os.getenv('SERVICE_ACCOUNT_JSON'):
+        raw_env = os.getenv('SERVICE_ACCOUNT_JSON')
+        if raw_env:
             # Load from environment variable (Railway)
-            service_account_info = json.loads(os.getenv('SERVICE_ACCOUNT_JSON'))
+            data = raw_env
+            
+            # 1. Handle double-stringification (If Railway sends it as a string-wrapped string)
+            if isinstance(data, str):
+                try:
+                    data = json.loads(data)
+                except:
+                    pass
+            
+            # 2. Handle Nesting (If user pasted the whole Railway JSON payload)
+            if isinstance(data, dict) and 'SERVICE_ACCOUNT_JSON' in data:
+                data = data['SERVICE_ACCOUNT_JSON']
+                # Try parsing again if the inner value is still stringified
+                if isinstance(data, str):
+                    try:
+                        data = json.loads(data)
+                    except:
+                        pass
+            
+            # data should now be our service_account_info dict
+            service_account_info = data
             
             # Aggressive Repair: Handle one-line, escaped, or truncated keys
-            if 'private_key' in service_account_info:
+            if isinstance(service_account_info, dict) and 'private_key' in service_account_info:
                 pk = service_account_info['private_key']
                 
                 # 1. Strip ALL junk - headers, footers, newlines, escaped newlines, quotes, and spaces
