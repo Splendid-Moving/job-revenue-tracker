@@ -17,8 +17,19 @@ def get_creds():
             
             # Fix: Handle newline characters in private key that might be escaped
             if 'private_key' in service_account_info:
-                service_account_info['private_key'] = service_account_info['private_key'].replace('\\n', '\n')
-            
+                pk = service_account_info['private_key']
+                print(f"DEBUG: Private Key Length: {len(pk)}")
+                print(f"DEBUG: Starts with Header? {pk.startswith('-----BEGIN PRIVATE KEY-----')}")
+                print(f"DEBUG: Ends with Footer? {pk.endswith('-----END PRIVATE KEY-----')}")
+                print(f"DEBUG: Contains real newline? {'\\n' in pk}")
+                print(f"DEBUG: Contains literal slash-n? {'\\\\n' in pk}")
+                print(f"DEBUG: First 50 chars: {pk[:50]}...")
+                
+                # Attempt aggressive unescaping if standard replace didn't work
+                if '\\n' in pk:
+                    print("DEBUG: Replacing literal \\n with real newline")
+                    service_account_info['private_key'] = pk.replace('\\n', '\n')
+                
             creds = service_account.Credentials.from_service_account_info(
                 service_account_info, scopes=config.SCOPES)
         else:
