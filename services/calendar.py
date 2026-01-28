@@ -83,6 +83,12 @@ def get_todays_jobs(date_str=None):
         color_id = event.get('colorId', None)
         description = event.get('description', '')
         
+        # Filter: Only include actual moving jobs (must have "customer phone" and "date" in description)
+        description_lower = description.lower()
+        if 'customer phone' not in description_lower or 'date' not in description_lower:
+            print(f"Skipping non-job event: {summary}")
+            continue
+        
         source = None
         
         # 1. Try to parse from Description (New Method)
