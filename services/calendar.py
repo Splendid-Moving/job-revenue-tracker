@@ -114,3 +114,58 @@ def get_todays_jobs(date_str=None):
         })
         
     return jobs
+
+
+def get_tomorrows_jobs():
+    """
+    Fetches events from the calendar for tomorrow (Los Angeles time).
+    This is used by the 7 PM pre-population job.
+    """
+    la_tz = ZoneInfo('America/Los_Angeles')
+    tomorrow = datetime.now(la_tz) + timedelta(days=1)
+    tomorrow_str = tomorrow.strftime("%Y-%m-%d")
+    return get_todays_jobs(date_str=tomorrow_str)
+
+
+def update_event_description(event_id, form_url):
+    """
+    Appends the form URL to the event description.
+    If a form URL already exists, it will be replaced.
+    """
+    service = get_service('calendar', 'v3')
+    
+    try:
+        # Get current event
+        event = service.events().get(
+            calendarId=config.CALENDAR_ID,
+            eventId=event_id
+        ).execute()
+        
+        current_description = event.get('description', '')
+        
+        # Check if form link already exists
+        import re
+        form_link_pattern = r'\n?📋 Form: https?://[^\s]+'
+        
+        if re.search(form_link_pattern, current_description):
+            # Replace existing form link
+            new_description = re.sub(form_link_pattern, f'\n📋 Form: {form_url}', current_description)
+        else:
+            # Append form link
+            new_description = current_description + f'\n\n📋 Form: {form_url}'
+        
+        # Update event
+        event['description'] = new_description.strip()
+        service.events().update(
+            calendarId=config.CALENDAR_ID,
+            eventId=event_id,
+            body=event
+        ).execute()
+        
+        print(f"Updated event {event_id} with form URL")
+        return True
+        
+    except Exception as e:
+        print(f"Error updating event description: {e}")
+        return False
+

@@ -153,4 +153,97 @@ class SheetsService:
             # print(f"Check date error (likely sheet not found yet): {e}")
             return False
 
+    def create_job_row(self, date_str, job_id, summary, source):
+        """
+        Creates a pre-populated row for a job with blank revenue fields.
+        Used by the 7 PM pre-population job.
+        Returns the row number where the job was inserted.
+        """
+        sheet_name = self.get_monthly_sheet_name()
+        self.ensure_sheet_exists(sheet_name)
+        
+        # Row: [Date, Job ID, Summary, Status, Total Revenue, Net Revenue, Payment Type, Submitted At, Source]
+        # Status, revenues, payment, submitted_at are blank (to be filled by form)
+        row = [date_str, job_id, summary, "", "", "", "", "", source]
+        
+        result = self.service.spreadsheets().values().append(
+            spreadsheetId=self.spreadsheet_id,
+            range=f"'{sheet_name}'!A1",
+            valueInputOption='USER_ENTERED',
+            body={'values': [row]}
+        ).execute()
+        
+        # Extract row number from updatedRange (e.g., "'Jan 2026'!A5:I5" -> 5)
+        updated_range = result.get('updates', {}).get('updatedRange', '')
+        row_num = None
+        if updated_range:
+            import re
+            match = re.search(r'!A(\d+):', updated_range)
+            if match:
+                row_num = int(match.group(1))
+        
+        print(f"Created pre-populated row for job {job_id} at row {row_num}")
+        return row_num
+
+    def get_job_by_id(self, job_id, sheet_name=None):
+        """
+        Finds a job row by its Job ID (Column B).
+        Returns tuple: (row_number, row_data) or (None, None) if not found.
+        """
+        if not sheet_name:
+            sheet_name = self.get_monthly_sheet_name()
+        
+        try:
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"'{sheet_name}'!A:I"
+            ).execute()
+            
+            rows = result.get('values', [])
+            for idx, row in enumerate(rows):
+                # Column B (index 1) is Job ID
+                if len(row) > 1 and row[1] == job_id:
+                    return (idx + 1, row)  # 1-indexed row number
+            
+            return (None, None)
+            
+        except Exception as e:
+            print(f"Error fetching job by ID: {e}")
+            return (None, None)
+
+    def update_job_row(self, job_id, status, total_rev, net_rev, payment_type, sheet_name=None):
+        """
+        Updates an existing job row with form submission data.
+        Returns True on success, False on failure.
+        """
+        if not sheet_name:
+            sheet_name = self.get_monthly_sheet_name()
+        
+        row_num, existing_row = self.get_job_by_id(job_id, sheet_name)
+        
+        if not row_num:
+            print(f"Job {job_id} not found in sheet {sheet_name}")
+            return False
+        
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Update columns D through H (Status, Total, Net, Payment, Submitted At)
+        # D=4, E=5, F=6, G=7, H=8 (1-indexed in Sheets)
+        update_range = f"'{sheet_name}'!D{row_num}:H{row_num}"
+        update_values = [[status, total_rev, net_rev, payment_type, timestamp]]
+        
+        self.service.spreadsheets().values().update(
+            spreadsheetId=self.spreadsheet_id,
+            range=update_range,
+            valueInputOption='USER_ENTERED',
+            body={'values': update_values}
+        ).execute()
+        
+        print(f"Updated job {job_id} at row {row_num}")
+        
+        # Update dashboard after changes
+        self.ensure_dashboard_sheet()
+        
+        return True
+
 # Singleton-ish helper if needed or just instantiate

@@ -167,7 +167,8 @@
             </div>
             {% endfor %}
 
-            <!-- Hidden field to lock the date being reported -->
+            <!-- Hidden fields for form mode and date -->
+            <input type="hidden" name="single_job_mode" value="{{ 'true' if single_job_mode else 'false' }}">
             <input type="hidden" name="date_reported_for" value="{{ date }}">
 
             <button type="submit">Submit Report</button>

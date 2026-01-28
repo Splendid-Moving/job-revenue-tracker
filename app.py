@@ -11,11 +11,48 @@ app = Flask(__name__)
 def index():
     try:
         log_info("Form page accessed")
-        # Trigger deployment 2026-01-26 11:35
         
-        # Check for date query parameter (YYYY-MM-DD)
+        # Check for single-job mode (job_id param)
+        job_id_param = request.args.get('job_id')
         date_param = request.args.get('date')
         
+        sheets = SheetsService()
+        
+        # ===== SINGLE-JOB MODE =====
+        if job_id_param:
+            log_info(f"Single-job mode: job_id={job_id_param}")
+            
+            # Fetch job data from sheets
+            row_num, row_data = sheets.get_job_by_id(job_id_param)
+            
+            if not row_data:
+                log_error(f"Job {job_id_param} not found in sheets")
+                return "Job not found. This link may be expired.", 404
+            
+            # Check if already submitted (Status column D, index 3 is not empty)
+            if len(row_data) > 3 and row_data[3]:
+                log_warning(f"Job {job_id_param} already submitted")
+                return render_template('already_submitted.html', date=row_data[0] if row_data else date_param)
+            
+            # Build job object from row data
+            # Row: [Date, Job ID, Summary, Status, Total, Net, Payment, Submitted At, Source]
+            job = {
+                'id': row_data[1] if len(row_data) > 1 else job_id_param,
+                'summary': row_data[2] if len(row_data) > 2 else 'Unknown Job',
+                'source': row_data[8] if len(row_data) > 8 else 'Other',
+                # Pre-fill existing values if any
+                'status': row_data[3] if len(row_data) > 3 else '',
+                'total_revenue': row_data[4] if len(row_data) > 4 else '',
+                'net_revenue': row_data[5] if len(row_data) > 5 else '',
+                'payment_type': row_data[6] if len(row_data) > 6 else '',
+            }
+            
+            date_str = row_data[0] if row_data else date_param or datetime.now().strftime("%Y-%m-%d")
+            
+            log_info(f"Loading single-job form for: {job['summary']}")
+            return render_template('report.html', jobs=[job], date=date_str, single_job_mode=True)
+        
+        # ===== MULTI-JOB MODE (Legacy) =====
         if date_param:
             date_str = date_param
             log_info(f"Using requested date: {date_str}")
@@ -25,7 +62,6 @@ def index():
         log_info(f"Checking for existing submission for {date_str}")
         
         # Check against Google Sheets to prevent duplicates (unless force=true)
-        sheets = SheetsService()
         if not request.args.get('force') and sheets.check_date_exists(date_str):
             log_warning(f"Duplicate submission attempted for {date_str}")
             return render_template('already_submitted.html', date=date_str)
@@ -34,120 +70,104 @@ def index():
         jobs = get_todays_jobs(date_str)
         
         log_info(f"Loaded {len(jobs)} jobs for {date_str}")
-        return render_template('report.html', jobs=jobs, date=date_str)
+        return render_template('report.html', jobs=jobs, date=date_str, single_job_mode=False)
     except Exception as e:
         log_error(f"Error loading form page: {str(e)}", exc_info=True)
-        # Expose error for debugging
         return f"Error loading jobs: {str(e)}", 500
 
 @app.route('/submit', methods=['POST'])
 def submit():
     try:
         log_info("Form submission received")
-        # Process form data
-        # Form structure: we iterating over jobs. 
-        # Inputs will likely be named like "status_<job_id>", "revenue_<job_id>", etc.
         
-        # We need to reconstruct which jobs were submitted. 
-        # Or strict hidden input "job_ids" list?
+        sheets = SheetsService()
         
-        # Let's iterate over keys to find job IDs
+        # Check if this is single-job mode (hidden input)
+        single_job_mode = request.form.get('single_job_mode') == 'true'
         
-        submission_data = [] # List of rows to append
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        # We can't easily know ALL job IDs just from request.form unless we pass them.
-        # But we can assume inputs are strictly named.
-        
-        # Let's group by prefix
-        # job_{id}_status
-        # job_{id}_total
-        # job_{id}_net
-        # job_{id}_summary (hidden)
-        
-        # Grouping
-        job_ids = set()
-        for key in request.form:
-            if key.startswith("job_") and "_status" in key:
-                # Extract ID: job_xyz123_status -> xyz123
-                # But IDs might have underscores. 
-                # Better: use a hidden input "job_ids" that is a comma separated list.
-                pass
-
-        # Better approach: request.form.getlist('job_id')
+        # Get job IDs from form
         job_id_list = request.form.getlist('job_id')
-        log_info(f"Processing {len(job_id_list)} job submissions")
+        log_info(f"Processing {len(job_id_list)} job(s), single_job_mode={single_job_mode}")
+        
+        # Get the date for this submission
+        date_val = request.form.get('date_reported_for')
+        if not date_val:
+            log_warning("Missing date_reported_for, falling back to today")
+            date_val = datetime.now().strftime("%Y-%m-%d")
+        
+        submission_data = []  # For multi-job append mode
         
         for jid in job_id_list:
-            summary = request.form.get(f'summary_{jid}')
             status = request.form.get(f'status_{jid}')
             total_rev = request.form.get(f'total_{jid}', '').strip()
             net_rev = request.form.get(f'net_{jid}', '').strip()
-            # Get source (from hidden input) and Payment Type
+            payment_type = request.form.get(f'payment_{jid}', '')
             source = request.form.get(f'source_{jid}', 'Other')
-            payment_type = request.form.get(f'payment_{jid}', '') 
-
-            # Fix: Use the date passed from the form (date_reported_for) 
-            # instead of datetime.now() to ensure duplicate check (check_date_exists) works correctly.
-            date_val = request.form.get('date_reported_for')
-            if not date_val:
-                log_warning("Missing date_reported_for, falling back to today")
-                date_val = datetime.now().strftime("%Y-%m-%d")
-
-            # Server-side logic for conditional fields
+            summary = request.form.get(f'summary_{jid}', '')
+            
+            # Server-side validation for "Yes" status
             if status == 'Yes':
-                # Determine "Yes" means we validate and save
                 try:
-                    # Validate total revenue
                     if not total_rev:
                         log_warning(f"Missing total revenue for job {jid}")
                         total_rev = "0"
-                    total_rev_float = float(total_rev)
-                    if total_rev_float < 0:
-                        log_error(f"Negative total revenue for job {jid}: {total_rev}")
+                    if float(total_rev) < 0:
                         return "Invalid data: Revenue cannot be negative", 400
                     
-                    # Validate net revenue
                     if not net_rev:
                         log_warning(f"Missing net revenue for job {jid}")
                         net_rev = "0"
-                    net_rev_float = float(net_rev)
-                    if net_rev_float < 0:
-                        log_error(f"Negative net revenue for job {jid}: {net_rev}")
+                    if float(net_rev) < 0:
                         return "Invalid data: Revenue cannot be negative", 400
                     
-                    # Validate Payment Type
                     if not payment_type:
-                         log_warning(f"Missing payment type for job {jid}")
-                         return "Invalid data: Payment Type is required", 400
-
-                except ValueError as e:
-                    log_error(f"Invalid revenue format for job {jid}: {e}")
+                        return "Invalid data: Payment Type is required", 400
+                        
+                except ValueError:
                     return "Invalid data: Revenue must be a number", 400
-
-                # Row: [Date, Job ID, Summary, Status, Total, Net, Payment, Submitted At, Source]
-                row = [date_val, jid, summary, status, total_rev, net_rev, payment_type, timestamp, source]
-                submission_data.append(row)
-            
+                
+                # ===== SINGLE-JOB MODE: Update existing row =====
+                if single_job_mode:
+                    result = sheets.update_job_row(
+                        job_id=jid,
+                        status=status,
+                        total_rev=total_rev,
+                        net_rev=net_rev,
+                        payment_type=payment_type
+                    )
+                    if result:
+                        log_info(f"Updated job {jid} in Google Sheets")
+                    else:
+                        log_error(f"Failed to update job {jid}")
+                        return "Error saving data. Please try again.", 500
+                else:
+                    # ===== MULTI-JOB MODE: Append row =====
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    row = [date_val, jid, summary, status, total_rev, net_rev, payment_type, timestamp, source]
+                    submission_data.append(row)
             else:
-                # Status is Cancelled/Rescheduled/Other
-                # We do NOT save to sheets (as requested) or we save with 0?
-                # User request: "only add the jobs to the google sheets, if it was marked yes."
-                log_info(f"Skipping job {jid} (Status: {status})")
-                pass
-            
-        # Write to Sheets
-        if submission_data:
-            sheets = SheetsService()
+                # Non-Yes status: In single-job mode, update anyway; in multi-job mode, skip
+                if single_job_mode:
+                    result = sheets.update_job_row(
+                        job_id=jid,
+                        status=status,
+                        total_rev="0",
+                        net_rev="0",
+                        payment_type=""
+                    )
+                    log_info(f"Updated job {jid} with status: {status}")
+                else:
+                    log_info(f"Skipping job {jid} (Status: {status})")
+        
+        # Write appended data for multi-job mode
+        if not single_job_mode and submission_data:
             result = sheets.append_job_data(submission_data)
             if result:
                 log_info(f"Successfully saved {len(submission_data)} jobs to Google Sheets")
             else:
                 log_error("Failed to save data to Google Sheets")
                 return "Error saving data. Please try again.", 500
-        else:
-            log_warning("No submission data received")
-            
+        
         return render_template('success.html')
         
     except Exception as e:
@@ -170,16 +190,16 @@ if __name__ == '__main__':
 # Scheduler Setup (Global Scope to run in Gunicorn)
 from apscheduler.schedulers.background import BackgroundScheduler
 from zoneinfo import ZoneInfo
-from send_email import main as _send_email_job
+from prepopulate import main as prepopulate_job
 
-def send_email_job():
+def run_prepopulate_job():
     """Wrapper to ensure scheduler job is logged properly."""
-    log_info("⏰ SCHEDULED JOB TRIGGERED: send_email_job starting...")
+    log_info("⏰ SCHEDULED JOB TRIGGERED: prepopulate_job starting...")
     try:
-        _send_email_job()
-        log_info("✅ SCHEDULED JOB COMPLETED: send_email_job finished successfully")
+        prepopulate_job()
+        log_info("✅ SCHEDULED JOB COMPLETED: prepopulate_job finished successfully")
     except Exception as e:
-        log_error(f"❌ SCHEDULED JOB FAILED: send_email_job crashed: {e}", exc_info=True)
+        log_error(f"❌ SCHEDULED JOB FAILED: prepopulate_job crashed: {e}", exc_info=True)
 
 def send_reminder_job():
     """
@@ -194,7 +214,8 @@ def send_reminder_job():
         sheets = SheetsService()
         if not sheets.check_date_exists(today_str):
             log_info(f"Report for {today_str} missing at 9:00 PM. Sending reminder.")
-            send_email_job(is_reminder=True)
+            # Note: Email reminders now handled by Make.com
+            # If you want to re-enable, import and call send_email here
         else:
             log_info(f"Report for {today_str} already submitted. Skipping reminder.")
     except Exception as e:
@@ -211,30 +232,30 @@ def start_scheduler():
         # Determine strict timezone
         la_tz = ZoneInfo('America/Los_Angeles')
         
-        # Add job: Daily at 6:00 PM LA time
+        # Add job: Daily at 7:00 PM LA time (Pre-populate tomorrow's jobs)
         scheduler.add_job(
-            send_email_job, 
+            run_prepopulate_job, 
             'cron', 
-            hour=18, 
+            hour=19, 
             minute=0, 
             timezone=la_tz,
-            id='daily_email_job',
+            id='prepopulate_job',
             replace_existing=True
         )
 
-        # Add job: Daily at 9:00 PM LA time (Reminder)
+        # Add job: Daily at 9:00 PM LA time (Reminder check)
         scheduler.add_job(
             send_reminder_job,
             'cron', 
             hour=21, 
             minute=0, 
             timezone=la_tz,
-            id='reminder_email_job',
+            id='reminder_job',
             replace_existing=True
         )
         
         scheduler.start()
-        log_info("✅ Internal Scheduler Started: Daily at 6PM and Reminder at 9PM PST")
+        log_info("✅ Internal Scheduler Started: Pre-populate at 7PM, Reminder check at 9PM PST")
         
         # Print next run time for verification
         jobs = scheduler.get_jobs()

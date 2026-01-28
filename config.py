@@ -3,7 +3,7 @@ import os
 # Google API Configuration
 SERVICE_ACCOUNT_FILE = 'service_account.json'
 SCOPES = [
-    'https://www.googleapis.com/auth/calendar.readonly',
+    'https://www.googleapis.com/auth/calendar',  # Full access (for updating events)
     'https://www.googleapis.com/auth/forms.body',
     'https://www.googleapis.com/auth/forms.responses.readonly',
     'https://www.googleapis.com/auth/drive', # Needed for creating file in folder
