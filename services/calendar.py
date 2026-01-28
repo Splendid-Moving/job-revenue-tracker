@@ -83,9 +83,10 @@ def get_todays_jobs(date_str=None):
         color_id = event.get('colorId', None)
         description = event.get('description', '')
         
-        # Filter: Only include actual moving jobs (must have "customer phone" and "date" in description)
+        # Filter: Only include actual moving jobs (must have "Customer:", "Phone:", "Date:" in description)
         description_lower = description.lower()
-        if 'customer phone' not in description_lower or 'date' not in description_lower:
+        required_fields = ['customer:', 'phone:', 'date:']
+        if not all(field in description_lower for field in required_fields):
             print(f"Skipping non-job event: {summary}")
             continue
         
