@@ -170,7 +170,16 @@ if __name__ == '__main__':
 # Scheduler Setup (Global Scope to run in Gunicorn)
 from apscheduler.schedulers.background import BackgroundScheduler
 from zoneinfo import ZoneInfo
-from send_email import main as send_email_job
+from send_email import main as _send_email_job
+
+def send_email_job():
+    """Wrapper to ensure scheduler job is logged properly."""
+    log_info("⏰ SCHEDULED JOB TRIGGERED: send_email_job starting...")
+    try:
+        _send_email_job()
+        log_info("✅ SCHEDULED JOB COMPLETED: send_email_job finished successfully")
+    except Exception as e:
+        log_error(f"❌ SCHEDULED JOB FAILED: send_email_job crashed: {e}", exc_info=True)
 
 def send_reminder_job():
     """
