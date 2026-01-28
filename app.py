@@ -12,65 +12,48 @@ def index():
     try:
         log_info("Form page accessed")
         
-        # Check for single-job mode (job_id param)
+        # Require job_id param for per-job forms
         job_id_param = request.args.get('job_id')
         date_param = request.args.get('date')
         
+        if not job_id_param:
+            log_warning("No job_id provided")
+            return "Missing job_id parameter. Use the form link from your calendar event.", 400
+        
         sheets = SheetsService()
         
-        # ===== SINGLE-JOB MODE =====
-        if job_id_param:
-            log_info(f"Single-job mode: job_id={job_id_param}")
-            
-            # Fetch job data from sheets
-            row_num, row_data = sheets.get_job_by_id(job_id_param)
-            
-            if not row_data:
-                log_error(f"Job {job_id_param} not found in sheets")
-                return "Job not found. This link may be expired.", 404
-            
-            # Check if already submitted (Status column D, index 3 is not empty)
-            if len(row_data) > 3 and row_data[3]:
-                log_warning(f"Job {job_id_param} already submitted")
-                return render_template('already_submitted.html', date=row_data[0] if row_data else date_param)
-            
-            # Build job object from row data
-            # Row: [Date, Job ID, Summary, Status, Total, Net, Payment, Submitted At, Source]
-            job = {
-                'id': row_data[1] if len(row_data) > 1 else job_id_param,
-                'summary': row_data[2] if len(row_data) > 2 else 'Unknown Job',
-                'source': row_data[8] if len(row_data) > 8 else 'Other',
-                # Pre-fill existing values if any
-                'status': row_data[3] if len(row_data) > 3 else '',
-                'total_revenue': row_data[4] if len(row_data) > 4 else '',
-                'net_revenue': row_data[5] if len(row_data) > 5 else '',
-                'payment_type': row_data[6] if len(row_data) > 6 else '',
-            }
-            
-            date_str = row_data[0] if row_data else date_param or datetime.now().strftime("%Y-%m-%d")
-            
-            log_info(f"Loading single-job form for: {job['summary']}")
-            return render_template('report.html', jobs=[job], date=date_str, single_job_mode=True)
+        log_info(f"Loading form for job_id={job_id_param}")
         
-        # ===== MULTI-JOB MODE (Legacy) =====
-        if date_param:
-            date_str = date_param
-            log_info(f"Using requested date: {date_str}")
-        else:
-            date_str = datetime.now().strftime("%Y-%m-%d")
-            
-        log_info(f"Checking for existing submission for {date_str}")
+        # Fetch job data from sheets (searches all sheets for cross-month support)
+        row_num, row_data, sheet_name = sheets.get_job_by_id(job_id_param)
         
-        # Check against Google Sheets to prevent duplicates (unless force=true)
-        if not request.args.get('force') and sheets.check_date_exists(date_str):
-            log_warning(f"Duplicate submission attempted for {date_str}")
-            return render_template('already_submitted.html', date=date_str)
-
-        # Fetch jobs for the specific date
-        jobs = get_todays_jobs(date_str)
+        if not row_data:
+            log_error(f"Job {job_id_param} not found in sheets")
+            return "Job not found. This link may be expired.", 404
         
-        log_info(f"Loaded {len(jobs)} jobs for {date_str}")
-        return render_template('report.html', jobs=jobs, date=date_str, single_job_mode=False)
+        # Check if already submitted (Status column D, index 3 is not empty)
+        if len(row_data) > 3 and row_data[3]:
+            log_warning(f"Job {job_id_param} already submitted")
+            return render_template('already_submitted.html', date=row_data[0] if row_data else date_param)
+        
+        # Build job object from row data
+        # Row: [Date, Job ID, Summary, Status, Total, Net, Payment, Submitted At, Source]
+        job = {
+            'id': row_data[1] if len(row_data) > 1 else job_id_param,
+            'summary': row_data[2] if len(row_data) > 2 else 'Unknown Job',
+            'source': row_data[8] if len(row_data) > 8 else 'Other',
+            # Pre-fill existing values if any
+            'status': row_data[3] if len(row_data) > 3 else '',
+            'total_revenue': row_data[4] if len(row_data) > 4 else '',
+            'net_revenue': row_data[5] if len(row_data) > 5 else '',
+            'payment_type': row_data[6] if len(row_data) > 6 else '',
+        }
+        
+        date_str = row_data[0] if row_data else date_param or datetime.now().strftime("%Y-%m-%d")
+        
+        log_info(f"Loading form for: {job['summary']} (sheet: {sheet_name})")
+        return render_template('report.html', jobs=[job], date=date_str, single_job_mode=True)
+        
     except Exception as e:
         log_error(f"Error loading form page: {str(e)}", exc_info=True)
         return f"Error loading jobs: {str(e)}", 500
@@ -82,91 +65,61 @@ def submit():
         
         sheets = SheetsService()
         
-        # Check if this is single-job mode (hidden input)
-        single_job_mode = request.form.get('single_job_mode') == 'true'
-        
-        # Get job IDs from form
+        # Get the single job ID from form
         job_id_list = request.form.getlist('job_id')
-        log_info(f"Processing {len(job_id_list)} job(s), single_job_mode={single_job_mode}")
         
-        # Get the date for this submission
-        date_val = request.form.get('date_reported_for')
-        if not date_val:
-            log_warning("Missing date_reported_for, falling back to today")
-            date_val = datetime.now().strftime("%Y-%m-%d")
+        if len(job_id_list) != 1:
+            log_error(f"Expected 1 job, got {len(job_id_list)}")
+            return "Invalid form submission", 400
         
-        submission_data = []  # For multi-job append mode
+        jid = job_id_list[0]
+        status = request.form.get(f'status_{jid}')
+        total_rev = request.form.get(f'total_{jid}', '').strip()
+        net_rev = request.form.get(f'net_{jid}', '').strip()
+        payment_type = request.form.get(f'payment_{jid}', '')
         
-        for jid in job_id_list:
-            status = request.form.get(f'status_{jid}')
-            total_rev = request.form.get(f'total_{jid}', '').strip()
-            net_rev = request.form.get(f'net_{jid}', '').strip()
-            payment_type = request.form.get(f'payment_{jid}', '')
-            source = request.form.get(f'source_{jid}', 'Other')
-            summary = request.form.get(f'summary_{jid}', '')
-            
-            # Server-side validation for "Yes" status
-            if status == 'Yes':
-                try:
-                    if not total_rev:
-                        log_warning(f"Missing total revenue for job {jid}")
-                        total_rev = "0"
-                    if float(total_rev) < 0:
-                        return "Invalid data: Revenue cannot be negative", 400
-                    
-                    if not net_rev:
-                        log_warning(f"Missing net revenue for job {jid}")
-                        net_rev = "0"
-                    if float(net_rev) < 0:
-                        return "Invalid data: Revenue cannot be negative", 400
-                    
-                    if not payment_type:
-                        return "Invalid data: Payment Type is required", 400
-                        
-                except ValueError:
-                    return "Invalid data: Revenue must be a number", 400
+        log_info(f"Processing job {jid} with status: {status}")
+        
+        # Server-side validation for "Yes" status
+        if status == 'Yes':
+            try:
+                if not total_rev:
+                    log_warning(f"Missing total revenue for job {jid}")
+                    total_rev = "0"
+                if float(total_rev) < 0:
+                    return "Invalid data: Revenue cannot be negative", 400
                 
-                # ===== SINGLE-JOB MODE: Update existing row =====
-                if single_job_mode:
-                    result = sheets.update_job_row(
-                        job_id=jid,
-                        status=status,
-                        total_rev=total_rev,
-                        net_rev=net_rev,
-                        payment_type=payment_type
-                    )
-                    if result:
-                        log_info(f"Updated job {jid} in Google Sheets")
-                    else:
-                        log_error(f"Failed to update job {jid}")
-                        return "Error saving data. Please try again.", 500
-                else:
-                    # ===== MULTI-JOB MODE: Append row =====
-                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    row = [date_val, jid, summary, status, total_rev, net_rev, payment_type, timestamp, source]
-                    submission_data.append(row)
-            else:
-                # Non-Yes status: In single-job mode, update anyway; in multi-job mode, skip
-                if single_job_mode:
-                    result = sheets.update_job_row(
-                        job_id=jid,
-                        status=status,
-                        total_rev="0",
-                        net_rev="0",
-                        payment_type=""
-                    )
-                    log_info(f"Updated job {jid} with status: {status}")
-                else:
-                    log_info(f"Skipping job {jid} (Status: {status})")
+                if not net_rev:
+                    log_warning(f"Missing net revenue for job {jid}")
+                    net_rev = "0"
+                if float(net_rev) < 0:
+                    return "Invalid data: Revenue cannot be negative", 400
+                
+                if not payment_type:
+                    return "Invalid data: Payment Type is required", 400
+                    
+            except ValueError:
+                return "Invalid data: Revenue must be a number", 400
+        else:
+            # Non-Yes status: set revenues to 0
+            total_rev = "0"
+            net_rev = "0"
+            payment_type = ""
         
-        # Write appended data for multi-job mode
-        if not single_job_mode and submission_data:
-            result = sheets.append_job_data(submission_data)
-            if result:
-                log_info(f"Successfully saved {len(submission_data)} jobs to Google Sheets")
-            else:
-                log_error("Failed to save data to Google Sheets")
-                return "Error saving data. Please try again.", 500
+        # Update the job row (auto-discovers correct sheet)
+        result = sheets.update_job_row(
+            job_id=jid,
+            status=status,
+            total_rev=total_rev,
+            net_rev=net_rev,
+            payment_type=payment_type
+        )
+        
+        if result:
+            log_info(f"Updated job {jid} in Google Sheets")
+        else:
+            log_error(f"Failed to update job {jid}")
+            return "Error saving data. Please try again.", 500
         
         return render_template('success.html')
         

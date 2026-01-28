@@ -49,7 +49,7 @@ def main():
         source = job.get('source', 'Other')
         
         # Check if job already exists in sheet (avoid duplicates)
-        existing_row, _ = sheets.get_job_by_id(job_id)
+        existing_row, _, _ = sheets.get_job_by_id(job_id)
         if existing_row:
             log_info(f"Job {job_id} already pre-populated. Skipping.")
             continue

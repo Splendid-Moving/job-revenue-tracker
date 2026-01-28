@@ -188,41 +188,52 @@ class SheetsService:
     def get_job_by_id(self, job_id, sheet_name=None):
         """
         Finds a job row by its Job ID (Column B).
-        Returns tuple: (row_number, row_data) or (None, None) if not found.
+        If sheet_name is None, searches ALL sheets (for cross-month lookups).
+        Returns tuple: (row_number, row_data, sheet_name) or (None, None, None) if not found.
         """
-        if not sheet_name:
-            sheet_name = self.get_monthly_sheet_name()
-        
         try:
-            result = self.service.spreadsheets().values().get(
-                spreadsheetId=self.spreadsheet_id,
-                range=f"'{sheet_name}'!A:I"
-            ).execute()
+            # Get list of sheets to search
+            if sheet_name:
+                sheets_to_search = [sheet_name]
+            else:
+                # Get all sheet names from spreadsheet
+                spreadsheet = self.service.spreadsheets().get(spreadsheetId=self.spreadsheet_id).execute()
+                sheets_to_search = [s['properties']['title'] for s in spreadsheet.get('sheets', [])]
+                # Exclude dashboard/summary sheets
+                sheets_to_search = [s for s in sheets_to_search if s != 'Summary']
             
-            rows = result.get('values', [])
-            for idx, row in enumerate(rows):
-                # Column B (index 1) is Job ID
-                if len(row) > 1 and row[1] == job_id:
-                    return (idx + 1, row)  # 1-indexed row number
+            for current_sheet in sheets_to_search:
+                try:
+                    result = self.service.spreadsheets().values().get(
+                        spreadsheetId=self.spreadsheet_id,
+                        range=f"'{current_sheet}'!A:I"
+                    ).execute()
+                    
+                    rows = result.get('values', [])
+                    for idx, row in enumerate(rows):
+                        # Column B (index 1) is Job ID
+                        if len(row) > 1 and row[1] == job_id:
+                            return (idx + 1, row, current_sheet)  # 1-indexed row number + sheet name
+                except Exception:
+                    continue  # Sheet might be empty or inaccessible
             
-            return (None, None)
+            return (None, None, None)
             
         except Exception as e:
             print(f"Error fetching job by ID: {e}")
-            return (None, None)
+            return (None, None, None)
 
-    def update_job_row(self, job_id, status, total_rev, net_rev, payment_type, sheet_name=None):
+    def update_job_row(self, job_id, status, total_rev, net_rev, payment_type):
         """
         Updates an existing job row with form submission data.
+        Automatically finds the correct sheet by searching all sheets.
         Returns True on success, False on failure.
         """
-        if not sheet_name:
-            sheet_name = self.get_monthly_sheet_name()
-        
-        row_num, existing_row = self.get_job_by_id(job_id, sheet_name)
+        # Find the job across all sheets
+        row_num, existing_row, sheet_name = self.get_job_by_id(job_id)
         
         if not row_num:
-            print(f"Job {job_id} not found in sheet {sheet_name}")
+            print(f"Job {job_id} not found in any sheet")
             return False
         
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
