@@ -12,34 +12,77 @@ class SheetsService:
         return datetime.now().strftime("%b %Y")
 
     def ensure_sheet_exists(self, sheet_name):
-        """Checks if sheet exists, creates it if not."""
+        """Checks if sheet exists, creates it if not.
+        Also formatting: Freezes top 2 rows, adds headers and SUM formulas.
+        """
         spreadsheet = self.service.spreadsheets().get(spreadsheetId=self.spreadsheet_id).execute()
         existing_sheets = [s['properties']['title'] for s in spreadsheet.get('sheets', [])]
         
         if sheet_name not in existing_sheets:
             print(f"Sheet '{sheet_name}' not found. Creating it...")
             body = {
-                'requests': [{
-                    'addSheet': {
-                        'properties': {
-                            'title': sheet_name
+                'requests': [
+                    {
+                        'addSheet': {
+                            'properties': {
+                                'title': sheet_name,
+                                'gridProperties': {
+                                    'frozenRowCount': 2
+                                }
+                            }
                         }
                     }
-                }]
+                ]
             }
             self.service.spreadsheets().batchUpdate(
                 spreadsheetId=self.spreadsheet_id, 
                 body=body
             ).execute()
             
-            # Optional: Add headers
+            # Add Headers (Row 1) and Total Formulas (Row 2)
             header = ["Date", "Job ID", "Summary", "Status", "Total Revenue", "Net Revenue", "Payment Type", "Submitted At", "Source"]
+            formulas = ["", "", "TOTALS:", "", "=SUM(E3:E)", "=SUM(F3:F)", "", "", ""]
+            
             self.service.spreadsheets().values().update(
                 spreadsheetId=self.spreadsheet_id,
-                range=f"{sheet_name}!A1",
+                range=f"'{sheet_name}'!A1:I2",
                 valueInputOption='USER_ENTERED',
-                body={'values': [header]}
+                body={'values': [header, formulas]}
             ).execute()
+            
+            # Bold the headers
+            format_body = {
+                'requests': [{
+                    'repeatCell': {
+                        'range': {
+                            'sheetId': self._get_sheet_id(sheet_name),
+                            'startRowIndex': 0,
+                            'endRowIndex': 2
+                        },
+                        'cell': {
+                            'userEnteredFormat': {
+                                'textFormat': {'bold': True}
+                            }
+                        },
+                        'fields': 'userEnteredFormat.textFormat.bold'
+                    }
+                }]
+            }
+            try:
+                self.service.spreadsheets().batchUpdate(
+                    spreadsheetId=self.spreadsheet_id,
+                    body=format_body
+                ).execute()
+            except Exception as e:
+                print(f"Formatting failed (non-critical): {e}")
+
+    def _get_sheet_id(self, sheet_name):
+        """Helper to get sheetId from sheet title"""
+        spreadsheet = self.service.spreadsheets().get(spreadsheetId=self.spreadsheet_id).execute()
+        for s in spreadsheet.get('sheets', []):
+            if s['properties']['title'] == sheet_name:
+                return s['properties']['sheetId']
+        return 0
 
     def append_job_data(self, job_report_list):
         """
@@ -112,13 +155,110 @@ class SheetsService:
                 range=f"{dashboard_name}!A1",
                 valueInputOption='USER_ENTERED',
                 body={'values': title}
-            ).execute()
+    def ensure_dashboard_sheet(self):
+        """
+        Creates/Updates a 'Summary' sheet that aggregates totals from ALL monthly sheets.
+        """
+        try:
+            dashboard_name = "Summary"
+            spreadsheet = self.service.spreadsheets().get(spreadsheetId=self.spreadsheet_id).execute()
+            sheets = spreadsheet.get('sheets', [])
+            existing_sheet_titles = [s['properties']['title'] for s in sheets]
+            
+            # Ensure Summary sheet exists
+            if dashboard_name not in existing_sheet_titles:
+                body = {
+                    'requests': [{
+                        'addSheet': {
+                            'properties': {
+                                'title': dashboard_name,
+                                'index': 0 # Make it the first tab
+                            }
+                        }
+                    }]
+                }
+                self.service.spreadsheets().batchUpdate(
+                    spreadsheetId=self.spreadsheet_id, 
+                    body=body
+                ).execute()
 
+            # Filter for monthly sheets (e.g. "Jan 2026")
+            import re
+            monthly_sheets = []
+            for s in sheets:
+                title = s['properties']['title']
+                # Match "Mmm YYYY" pattern
+                if re.match(r'^[A-Z][a-z]{2} \d{4}$', title):
+                    monthly_sheets.append(title)
+            
+            # Sort sheets chronologically
+            try:
+                monthly_sheets.sort(key=lambda x: datetime.strptime(x, "%b %Y"))
+            except ValueError:
+                pass # Keep original order if parsing fails
+
+            # Build Summary Table
+            # Header
+            summary_data = [
+                ["GLOBAL REVENUE HISTORY"],
+                ["Month", "Total Revenue", "Net Revenue"],
+            ]
+            
+            grand_total_rev = 0
+            grand_total_net = 0
+            
+            # Rows for each month
+            # We use INDIRECT to reference the totals in cell E2 and F2 of each sheet
+            # Or we can just build the SUM formulas dynamically: =SUM('Jan 2026'!E3:E)
+            
+            for sheet in monthly_sheets:
+                # Using formulas is better so it updates live
+                row = [
+                    sheet, 
+                    f"=SUM('{sheet}'!E3:E)", 
+                    f"=SUM('{sheet}'!F3:F)"
+                ]
+                summary_data.append(row)
+                
+            # Grand Total Row
+            summary_data.append(["", "", ""]) # Spacer
+            summary_data.append([
+                "GRAND TOTAL", 
+                f"=SUM(B3:B{len(summary_data)})", 
+                f"=SUM(C3:C{len(summary_data)})"
+            ])
+            
+            # Write to Summary Sheet
             self.service.spreadsheets().values().update(
                 spreadsheetId=self.spreadsheet_id,
-                range=f"{dashboard_name}!A3",
+                range=f"{dashboard_name}!A1",
                 valueInputOption='USER_ENTERED',
-                body={'values': [[formula]]}
+                body={'values': summary_data}
+            ).execute()
+            
+            # Format Summary Sheet
+            format_requests = [
+                # Bold Header
+                {
+                    'repeatCell': {
+                        'range': {'sheetId': self._get_sheet_id(dashboard_name), 'startRowIndex': 1, 'endRowIndex': 2},
+                        'cell': {'userEnteredFormat': {'textFormat': {'bold': True}}},
+                        'fields': 'userEnteredFormat.textFormat.bold'
+                    }
+                },
+                # Bold Grand Total
+                {
+                    'repeatCell': {
+                        'range': {'sheetId': self._get_sheet_id(dashboard_name), 'startRowIndex': len(summary_data)-1, 'endRowIndex': len(summary_data)},
+                        'cell': {'userEnteredFormat': {'textFormat': {'bold': True}}},
+                        'fields': 'userEnteredFormat.textFormat.bold'
+                    }
+                }
+            ]
+            
+            self.service.spreadsheets().batchUpdate(
+                spreadsheetId=self.spreadsheet_id,
+                body={'requests': format_requests}
             ).execute()
             
         except Exception as e:
@@ -164,7 +304,8 @@ class SheetsService:
         
         # Row: [Date, Job ID, Summary, Status, Total Revenue, Net Revenue, Payment Type, Submitted At, Source]
         # Status, revenues, payment, submitted_at are blank (to be filled by form)
-        row = [date_str, job_id, summary, "", "", "", "", "", source]
+        # Use None for empty fields so they stay blank in sheets (better for sum formulas)
+        row = [date_str, job_id, summary, "", None, None, "", "", source]
         
         result = self.service.spreadsheets().values().append(
             spreadsheetId=self.spreadsheet_id,
