@@ -115,46 +115,7 @@ class SheetsService:
         
         return result
 
-    def ensure_dashboard_sheet(self):
-        """
-        Creates/Updates a 'Summary' sheet with a dynamic dashboard formula.
-        """
-        try:
-            dashboard_name = "Summary"
-            spreadsheet = self.service.spreadsheets().get(spreadsheetId=self.spreadsheet_id).execute()
-            existing_sheets = [s['properties']['title'] for s in spreadsheet.get('sheets', [])]
-            
-            if dashboard_name not in existing_sheets:
-                body = {
-                    'requests': [{
-                        'addSheet': {
-                            'properties': {
-                                'title': dashboard_name,
-                                'index': 0 # Make it the first tab
-                            }
-                        }
-                    }]
-                }
-                self.service.spreadsheets().batchUpdate(
-                    spreadsheetId=self.spreadsheet_id, 
-                    body=body
-                ).execute()
 
-            # Update Formulas for the current month
-            current_month = self.get_monthly_sheet_name()
-            
-            # Dashboard Title
-            title = [[f"Monthly Revenue Breakdown ({current_month})"], []]
-            
-            # The QUERY formula aggregates by Source (Col I) where Status (Col D) is 'Yes'
-            # A=1, B=2, C=3, D=4, E=5, F=6, G=7, H=8, I=9
-            formula = f"=QUERY('{current_month}'!A:I, \"select I, sum(E), sum(F) where D = 'Yes' group by I label I 'Source', sum(E) 'Total Revenue', sum(F) 'Net Revenue'\", 1)"
-            
-            self.service.spreadsheets().values().update(
-                spreadsheetId=self.spreadsheet_id,
-                range=f"{dashboard_name}!A1",
-                valueInputOption='USER_ENTERED',
-                body={'values': title}
     def ensure_dashboard_sheet(self):
         """
         Creates/Updates a 'Summary' sheet that aggregates totals from ALL monthly sheets.
@@ -201,31 +162,30 @@ class SheetsService:
             # Header
             summary_data = [
                 ["GLOBAL REVENUE HISTORY"],
-                ["Month", "Total Revenue", "Net Revenue"],
+                ["Month", "Total Revenue", "Net Revenue", "Yelp Revenue", "Google LSA Revenue"],
             ]
             
-            grand_total_rev = 0
-            grand_total_net = 0
-            
             # Rows for each month
-            # We use INDIRECT to reference the totals in cell E2 and F2 of each sheet
-            # Or we can just build the SUM formulas dynamically: =SUM('Jan 2026'!E3:E)
-            
             for sheet in monthly_sheets:
                 # Using formulas is better so it updates live
+                # E: Total, F: Net, I: Source
                 row = [
                     sheet, 
                     f"=SUM('{sheet}'!E3:E)", 
-                    f"=SUM('{sheet}'!F3:F)"
+                    f"=SUM('{sheet}'!F3:F)",
+                    f"=SUMIF('{sheet}'!I3:I, \"Yelp\", '{sheet}'!E3:E)",
+                    f"=SUMIF('{sheet}'!I3:I, \"Google LSA\", '{sheet}'!E3:E)"
                 ]
                 summary_data.append(row)
                 
             # Grand Total Row
-            summary_data.append(["", "", ""]) # Spacer
+            summary_data.append(["", "", "", "", ""]) # Spacer
             summary_data.append([
                 "GRAND TOTAL", 
                 f"=SUM(B3:B{len(summary_data)})", 
-                f"=SUM(C3:C{len(summary_data)})"
+                f"=SUM(C3:C{len(summary_data)})",
+                f"=SUM(D3:D{len(summary_data)})",
+                f"=SUM(E3:E{len(summary_data)})"
             ])
             
             # Write to Summary Sheet

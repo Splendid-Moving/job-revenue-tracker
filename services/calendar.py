@@ -111,9 +111,17 @@ def get_todays_jobs(date_str=None):
             else:
                 source = 'Other'
         
+        # Clean up Summary (Customer Name)
+        # Remove anything in parentheses: "Name (info)" -> "Name"
+        # Remove anything after +: "Name + info" -> "Name"
+        clean_summary = re.sub(r'\s*\(.*?\)', '', summary)
+        clean_summary = re.sub(r'\s*\+.*', '', clean_summary)
+        clean_summary = clean_summary.strip()
+        
         jobs.append({
             'id': event['id'],
-            'summary': summary,
+            'summary': clean_summary,
+            'original_summary': summary, # Keep original just in case
             'start': event['start'].get('dateTime', event['start'].get('date')),
             'location': event.get('location', 'No Location'),
             'colorId': color_id,
