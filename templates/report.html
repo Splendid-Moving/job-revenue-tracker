@@ -134,33 +134,33 @@
                 <input type="hidden" name="source_{{ job.id }}" value="{{ job.source }}">
 
                 <div class="form-group">
-                    <label>Did the move happen?</label>
+                    <label>Состоялся ли переезд?</label>
                     <select name="status_{{ job.id }}" required>
-                        <option value="Yes">Yes</option>
-                        <option value="Cancelled">Cancelled</option>
-                        <option value="Rescheduled">Rescheduled</option>
-                        <option value="Other">Other</option>
+                        <option value="Yes">Да</option>
+                        <option value="Cancelled">Отменен</option>
+                        <option value="Rescheduled">Перенесен</option>
+                        <option value="Other">Другое</option>
                     </select>
                 </div>
 
                 <!-- Revenue Section (Visible only if Status is Yes) -->
                 <div id="revenue-section-{{ job.id }}">
                     <div class="form-group">
-                        <label>Total Revenue ($)</label>
+                        <label>Тотал (вместе с депозитом)</label>
                         <input type="number" step="0.01" name="total_{{ job.id }}" placeholder="0.00" required>
                     </div>
 
                     <div class="form-group">
-                        <label>Net Revenue ($)</label>
+                        <label>Остаток</label>
                         <input type="number" step="0.01" name="net_{{ job.id }}" placeholder="0.00" required>
                     </div>
 
                     <div class="form-group">
-                        <label>Payment Type</label>
+                        <label>Способ оплаты</label>
                         <select name="payment_{{ job.id }}" required>
-                            <option value="" disabled selected>Select One</option>
-                            <option value="Card">Card</option>
-                            <option value="Cash">Cash</option>
+                            <option value="" disabled selected>Выберите один</option>
+                            <option value="Card">Карта</option>
+                            <option value="Cash">Наличные</option>
                         </select>
                     </div>
                 </div>
@@ -171,7 +171,7 @@
             <input type="hidden" name="single_job_mode" value="{{ 'true' if single_job_mode else 'false' }}">
             <input type="hidden" name="date_reported_for" value="{{ date }}">
 
-            <button type="submit">Submit Report</button>
+            <button type="submit">Отправить отчет</button>
         </form>
         {% else %}
         <p>No moving jobs found for today.</p>

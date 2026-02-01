@@ -176,3 +176,48 @@ def update_event_description(event_id, form_url):
         print(f"Error updating event description: {e}")
         return False
 
+
+def mark_event_as_completed(event_id):
+    """
+    Removes the form URL from the event description and marks it as completed.
+    Called after successful form submission.
+    """
+    service = get_service('calendar', 'v3')
+    
+    try:
+        # Get current event
+        event = service.events().get(
+            calendarId=config.CALENDAR_ID,
+            eventId=event_id
+        ).execute()
+        
+        current_description = event.get('description', '')
+        
+        # Remove the Form URL line using regex
+        # Matches "📋 Form: http..." and any surrounding whitespace
+        import re
+        form_link_pattern = r'\n?📋 Form: https?://[^\s]+'
+        new_description = re.sub(form_link_pattern, '', current_description)
+        
+        # Clean up extra newlines
+        new_description = new_description.strip()
+        
+        # Add completion marker if not present
+        if "✅ Form Completed" not in new_description:
+            new_description += "\n\n✅ Form Completed"
+        
+        event['description'] = new_description
+        
+        service.events().update(
+            calendarId=config.CALENDAR_ID,
+            eventId=event_id,
+            body=event
+        ).execute()
+        
+        print(f"Marked event {event_id} as completed")
+        return True
+        
+    except Exception as e:
+        print(f"Error marking event as completed: {e}")
+        return False
+

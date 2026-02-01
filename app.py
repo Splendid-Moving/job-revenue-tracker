@@ -117,6 +117,15 @@ def submit():
         
         if result:
             log_info(f"Updated job {jid} in Google Sheets")
+            
+            # Update Calendar: Remove form link and mark as completed
+            from services.calendar import mark_event_as_completed
+            mark_result = mark_event_as_completed(jid)
+            if mark_result:
+                log_info(f"Updated calendar event {jid}")
+            else:
+                log_warning(f"Failed to update calendar event {jid}")
+                
         else:
             log_error(f"Failed to update job {jid}")
             return "Error saving data. Please try again.", 500
@@ -185,11 +194,11 @@ def start_scheduler():
         # Determine strict timezone
         la_tz = ZoneInfo('America/Los_Angeles')
         
-        # Add job: Daily at 7:00 PM LA time (Pre-populate tomorrow's jobs)
+        # Add job: Daily at 9:00 AM LA time (Pre-populate tomorrow's jobs)
         scheduler.add_job(
             run_prepopulate_job, 
             'cron', 
-            hour=19, 
+            hour=9, 
             minute=0, 
             timezone=la_tz,
             id='prepopulate_job',
@@ -208,7 +217,7 @@ def start_scheduler():
         )
         
         scheduler.start()
-        log_info("✅ Internal Scheduler Started: Pre-populate at 7PM, Reminder check at 9PM PST")
+        log_info("✅ Internal Scheduler Started: Pre-populate at 9AM, Reminder check at 9PM PST")
         
         # Print next run time for verification
         jobs = scheduler.get_jobs()

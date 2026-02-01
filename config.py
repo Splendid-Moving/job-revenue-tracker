@@ -18,17 +18,11 @@ SCOPES = [
 # Calendar Configuration
 CALENDAR_ID = 'info@splendidmoving.com' # User's shared calendar
 
-# Forms Configuration
-# EXISTING_SHEET_ID = "1USAoTNsUKIzg4XKzyeQANUYDNQCblQa8ROJ2Q3d1s7k" 
-
-# For the forms API, we can't easily "append" to an existing sheet without complex logic, 
-# but we can try to set the destination to this ID. 
-# However, Forms API often creates a NEW sheet (tab) inside the spreadsheet.
 
 TARGET_SPREADSHEET_ID = "1USAoTNsUKIzg4XKzyeQANUYDNQCblQa8ROJ2Q3d1s7k"
 
 # Email Configuration
-TARGET_EMAIL = 'info@splendidmoving.com' # Updated target email
+TARGET_EMAIL = 'info@splendidmoving.com'
 
 # Calendar Event Color to Source Mapping
 # Color IDs from Google Calendar API
