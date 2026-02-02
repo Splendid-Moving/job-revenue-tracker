@@ -109,7 +109,7 @@ def submit():
         # Update the job row (auto-discovers correct sheet)
         result = sheets.update_job_row(
             job_id=jid,
-            status=status,
+            status='Completed' if status == 'Yes' else status,
             total_rev=total_rev,
             net_rev=net_rev,
             payment_type=payment_type
