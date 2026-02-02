@@ -1,17 +1,18 @@
 # Splendid Moving - Job Revenue Tracker
 
-Automated daily job revenue reporting system that fetches moving jobs from Google Calendar and creates a web form to collect revenue data, which is then stored in Google Sheets.
+Automated job revenue reporting system that pre-populates tomorrow's moving jobs from Google Calendar into Google Sheets and manages per-event reporting links.
 
 ---
 
 ## 📋 Overview
 
-This system automates the daily workflow of tracking revenue for moving jobs:
+The system automates the tracking of revenue by pre-preparing the reporting infrastructure every day:
 
-1. **Fetches** today's jobs from Google Calendar (`info@splendidmoving.com`)
-2. **Generates** a web form with 3 questions per job
-3. **Sends** an email notification with the form link
-4. **Saves** submitted data to Google Sheets (auto-creates monthly tabs like "Jan 2026")
+1.  **Pre-Populates**: Every day at **9:00 AM**, the system fetches tomorrow's jobs from Google Calendar.
+2.  **Initializes Sheets**: Creates a blank row for each job in the monthly Google Sheet (e.g., "Feb 2026").
+3.  **Links Calendar**: Adds a unique reporting URL directly to the description of each Google Calendar event.
+4.  **Collects Data**: Moving crews click the link in their calendar, fill out the Russian-localized form, and submit.
+5.  **Finalizes**: Upon submission, the row in Sheets is updated with revenue data, and the Calendar event is marked as **"✅ Form Completed"**.
 
 ---
 
@@ -19,84 +20,58 @@ This system automates the daily workflow of tracking revenue for moving jobs:
 
 ```
 ┌─────────────────┐
-│ Google Calendar │ ──> Fetch jobs for today
-└─────────────────┘
-         │
-         ▼
-┌─────────────────┐
-│ GitHub Actions  │ ──> Automation Trigger (6 PM)
-└─────────────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Email (SMTP)   │ ──> Send form link
-└─────────────────┘
-         │
-         ▼
-┌─────────────────┐
-│    Railway      │ ──> Hosting the Web Form
-│ (Production URL)│
-└─────────────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Google Sheets   │ ──> Store revenue data
+│ Google Calendar │ <───┐ 1. Fetch Tomorrow's Jobs (9 AM)
+└─────────────────┘     │ 3. Add Form Link to Description
+         │              │ 5. Mark "Completed" on Submit
+         ▼              │
+┌─────────────────┐     │
+│   Railway App   │ ────┘
+│ (Internal Cron) │ ────┐
+└─────────────────┘     │
+         │              │ 2. Create blank rows (9 AM)
+         ▼              │ 4. Update with Revenue on Submit
+┌─────────────────┐     │
+│  Google Sheets  │ <────┘
 └─────────────────┘
 ```
 
 ---
 
-## 🔑 Credentials Required
+## 🔑 Key Features
 
-### 1. Service Account (Google Cloud)
-- **File**: `service_account.json`
-- **Email**: `moving-tracker-server@ad-report-automation-484101.iam.gserviceaccount.com`
-- **Permissions**: Must have access to:
-  - Google Calendar (`info@splendidmoving.com`)
-  - Google Sheets (Job Revenue Tracker)
+### 1. Per-Job Reporting
+Instead of one large form, each job has its own unique Link. This prevents data conflicts and ensures every single move is accounted for.
 
-### 2. SMTP Email (Gmail App Password)
-- **File**: `.env`
-- **Required variables**:
-  ```
-  SMTP_EMAIL=info@splendidmoving.com
-  SMTP_PASSWORD=your_16_char_app_password
-  USE_SMTP=true
-  ```
-- **How to get App Password**: https://myaccount.google.com/apppasswords
+### 2. Global Summary Dashboard
+The **"Summary"** tab in Google Sheets provides:
+- **Chronological History**: Monthly revenue totals for your entire business history.
+- **Source Breakdown**: Separate columns for **Yelp** and **Google LSA** revenue.
+- **Grand Totals**: Lifetime revenue tracking at the bottom.
 
----
+### 3. Russian Localization
+The form is fully translated to Russian for the crew's convenience:
+- `Состоялся ли мув?` (Did the move happen?)
+- `Тотал (вместе с депозитом)` (Total Revenue)
+- `Остаток` (Net Revenue)
 
-## 📊 Data Flow
-
-### Questions Asked Per Job:
-1. **Did the move happen?** (Yes / Cancelled / Rescheduled / Other)
-2. **Total revenue collected?** ($)
-3. **Net revenue collected?** ($)
-
-### Google Sheet Columns:
-| Date | Job ID | Summary | Status | Total Revenue | Net Revenue | Source | Submitted At |
-|------|--------|---------|--------|---------------|-------------|--------|--------------|
-
-**Source Detection** (based on Google Calendar event colors):
-- 🟠 Orange (`#ffb878`) = **Yelp**
-- 🟢 Teal (`#7ae7bf`) = **Google LSA**
-- ⚪ No color = **Other**
-
-> **Note**: Colors must be set on the event itself in Google Calendar (not just visual calendar color)
+### 4. Smart Scheduling
+- **9:00 AM**: Pre-population run (prepares tomorrow's jobs).
+- **9:00 PM**: Reminder check (detects if any reports for *today* are still missing).
 
 ---
 
-## 🚀 Daily Workflow
+## ⚙️ Configuration
 
-The system is now **100% automated**.
+### Source Detection
+The system automatically identifies the lead source:
+1.  **Description**: Looks for "Source: Yelp" or "Source: Google LSA" in the notes.
+2.  **Fallback (Color)**:
+    - � Orange (`#ffb878`) = **Yelp**
+    - 🟢 Teal (`#7ae7bf`) = **Google LSA**
+    - ⚪ Other = **Other**
 
-1. **Wait for the Email**: Every day at **6:00 PM**, you will receive an email from `info@splendidmoving.com`.
-2. **Click the Link**: Open the link in the email (works on phone or computer).
-3. **Submit Report**: Verify the job details, enter revenue numbers, and click Submit.
-4. **Done!**: Data is instantly saved to the Google Sheet.
-
-*(You do not need to run any code or keep your computer on)*
+### Calendar Filtering
+To prevent personal tasks from appearing in the sheet, the system only processes events that contain **"customer phone"** and **"date"** in their description field.
 
 ---
 
@@ -104,189 +79,28 @@ The system is now **100% automated**.
 
 ```
 job_form_automation/
-├── app.py                  # Flask web server (form display & submission)
-├── send_email.py           # Email notification script
-├── config.py               # Configuration (calendar ID, sheet ID, color mapping)
-├── .env                    # SMTP credentials (DO NOT COMMIT)
-├── service_account.json    # Google Service Account key (DO NOT COMMIT)
-│
+├── app.py                  # Flask server + Internal Scheduler
+├── prepopulate.py         # Logic for fetching jobs & creating rows
+├── config.py               # Sheet IDs, Calendar IDs, and color maps
 ├── services/
-│   ├── auth.py            # Google API authentication
-│   ├── calendar.py        # Fetch jobs from Google Calendar
-│   ├── sheets.py          # Write data to Google Sheets
-│   └── email_smtp.py      # Send emails via Gmail SMTP
-│
-├── templates/
-│   ├── report.html        # Main form template
-│   └── success.html       # Success page after submission
-│
-└── requirements.txt       # Python dependencies
+│   ├── calendar.py        # Google Calendar API integration
+│   ├── sheets.py          # Google Sheets API (Dashboard & Data)
+│   └── auth.py            # API Authentication
+└── templates/
+    ├── report.html        # Russian-localized reporting form
+    └── success.html       # Success confirmation
 ```
 
 ---
 
-## ⚙️ Configuration
+## 🚀 Deployment
 
-### `config.py`
+The app is hosted on **Railway** and connects to the **Splendid Moving** Google Service Account.
 
-**Calendar Settings:**
-```python
-CALENDAR_ID = 'info@splendidmoving.com'
-```
-
-**Google Sheet:**
-```python
-TARGET_SPREADSHEET_ID = "1USAoTNsUKIzg4XKzyeQANUYDNQCblQa8ROJ2Q3d1s7k"
-```
-
-**Color-to-Source Mapping:**
-```python
-COLOR_SOURCE_MAP = {
-    '6': 'Yelp',        # Orange
-    '2': 'Google LSA',  # Teal
-}
-```
-
-**Email:**
-```python
-TARGET_EMAIL = 'info@splendidmoving.com'
-```
-
----
-
-## 🔧 Troubleshooting
-
-### "localhost refused to connect"
-- **Cause**: Flask app not running
-- **Fix**: Run `python3 app.py`
-
-### "Duplicate rows in Google Sheets"
-- **Cause**: Flask debug mode spawning multiple processes
-- **Fix**: Already fixed with `use_reloader=False` in `app.py`
-
-### "Colors not detected"
-- **Cause**: Event colors not set via API (only visual in UI)
-- **Fix**: 
-  1. Open event in Google Calendar
-  2. Click Edit → Select color from dropdown
-  3. Save
-
-### "Email not sending"
-- **Cause**: Invalid SMTP credentials
-- **Fix**: Check `.env` file has correct app password
-
-### "No jobs found"
-- **Cause**: Service Account doesn't have calendar access
-- **Fix**: Share calendar with `moving-tracker-server@ad-report-automation-484101.iam.gserviceaccount.com`
-
----
-
-## 🏗 System Architecture
-
-This project uses a **Hybrid Architecture** for maximum reliability and zero maintenance.
-
-### 1. The Web App (Railway)
-*   **Status**: 🟢 Online 24/7
-*   **URL**: `https://web-production-755dc.up.railway.app`
-*   **Purpose**: Hosts the actual form you fill out.
-*   **Why Railway?**: It gives us a permanent, secure URL accessible from any device (phone or laptop), so you don't need your computer running to submit data.
-
-### 2. The Automation (GitHub Actions)
-*   **Status**: 🟢 Runs Daily @ 6 PM (LA Time)
-*   **Purpose**: The "Alarm Clock" that wakes up, checks Google Calendar for jobs, and emails you the link.
-*   **Why GitHub Actions?**: 
-    1. **Reliability**: It runs on GitHub's servers, so it works even if your computer is off or sleeping.
-    2. **Cost**: It is completely free for this usage.
-    3. **Separation**: It keeps the "trigger" separate from the "website", ensuring the email sends even if the website were momentarily restarting.
-
----
-
-## 🔄 How It Works Daily
-
-1. **6:00 PM**: GitHub Actions starts up.
-2. It fetches jobs from **Google Calendar** (using "Los Angeles" timezone).
-3. It sends an email to `info@splendidmoving.com` with the **Railway Link**.
-4. You click the link, fill out the revenue, and click **Submit**.
-5. Data is securely saved to **Google Sheets**.
-
----
-
----
-
-## 📦 Dependencies
-
-Install with:
-```bash
-pip install -r requirements.txt
-```
-
-**Required packages:**
-- `flask` - Web framework
-- `google-api-python-client` - Google APIs
-- `google-auth-httplib2` - Authentication
-- `google-auth-oauthlib` - OAuth support
-- `python-dotenv` - Environment variables
-- `requests` - HTTP requests
-
----
-
-## 🔐 Security Notes
-
-**DO NOT commit these files to Git:**
-- `.env` (contains SMTP password)
-- `service_account.json` (contains private key)
-
-Add to `.gitignore`:
-```
-.env
-service_account.json
-*.pyc
-__pycache__/
-```
-
----
-
-## 📝 Sheet Behavior
-
-- **Auto-creates monthly tabs**: "Jan 2026", "Feb 2026", etc.
-- **Header row added automatically** on first use of each month
-- **Appends data** to the bottom of the current month's tab
-- **Old tabs preserved** for historical data
-
----
-
-## 🎨 Customization
-
-### Change Form Styling
-Edit `templates/report.html` - CSS is inline in the `<style>` tag
-
-### Add More Questions
-1. Update `templates/report.html` (add form fields)
-2. Update `app.py` (capture new fields in `/submit` route)
-3. Update `services/sheets.py` (add columns to header)
-
-### Change Email Template
-Edit `send_email.py` - modify `html_body` variable
-
----
-
-## 📞 Support
-
-**Service Account Email**: `moving-tracker-server@ad-report-automation-484101.iam.gserviceaccount.com`  
 **Google Sheet**: [Job Revenue Tracker](https://docs.google.com/spreadsheets/d/1USAoTNsUKIzg4XKzyeQANUYDNQCblQa8ROJ2Q3d1s7k)  
-**Calendar**: `info@splendidmoving.com`
+**Main Calendar**: `info@splendidmoving.com`  
 
 ---
 
-## ✅ Quick Start Checklist
+**Last Updated**: February 1, 2026
 
-- [x] Service Account has calendar access
-- [x] Service Account has sheet access
-- [x] GitHub Secrets configured (SMTP, Service Account, Base URL)
-- [x] GitHub Actions workflow active
-- [x] Railway App deployed and running
-- [x] Test submission saved to Google Sheets
-
----
-
-**Last Updated**: January 20, 2026
