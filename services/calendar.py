@@ -134,12 +134,23 @@ def get_todays_jobs(date_str=None):
 def get_tomorrows_jobs():
     """
     Fetches events from the calendar for tomorrow (Los Angeles time).
-    This is used by the 7 PM pre-population job.
+    This is used by the 9 AM pre-population job.
     """
     la_tz = ZoneInfo('America/Los_Angeles')
     tomorrow = datetime.now(la_tz) + timedelta(days=1)
     tomorrow_str = tomorrow.strftime("%Y-%m-%d")
     return get_todays_jobs(date_str=tomorrow_str)
+
+
+def get_yesterdays_jobs():
+    """
+    Fetches events from the calendar for yesterday (Los Angeles time).
+    Used by the 9 AM reconciliation step to catch late-scheduled jobs.
+    """
+    la_tz = ZoneInfo('America/Los_Angeles')
+    yesterday = datetime.now(la_tz) - timedelta(days=1)
+    yesterday_str = yesterday.strftime("%Y-%m-%d")
+    return get_todays_jobs(date_str=yesterday_str)
 
 
 def update_event_description(event_id, form_url):

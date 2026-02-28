@@ -9,10 +9,11 @@ Automated job revenue reporting system that pre-populates tomorrow's moving jobs
 The system automates the tracking of revenue by pre-preparing the reporting infrastructure every day:
 
 1.  **Pre-Populates**: Every day at **9:00 AM**, the system fetches tomorrow's jobs from Google Calendar.
-2.  **Initializes Sheets**: Creates a blank row for each job in the monthly Google Sheet (e.g., "Feb 2026").
-3.  **Links Calendar**: Adds a unique reporting URL directly to the description of each Google Calendar event.
-4.  **Collects Data**: Moving crews click the link in their calendar, fill out the Russian-localized form, and submit.
-5.  **Finalizes**: Upon submission, the row in Sheets is updated with revenue data, and the Calendar event is marked as **"✅ Form Completed"**.
+2.  **Reconciles**: During the same run, it checks yesterday's jobs against the Sheet and backfills any that were missed (e.g., same-day or late-scheduled jobs).
+3.  **Initializes Sheets**: Creates a blank row for each job in the correct monthly Google Sheet (e.g., "Feb 2026").
+4.  **Links Calendar**: Adds a unique reporting URL directly to the description of each Google Calendar event.
+5.  **Collects Data**: Moving crews click the link in their calendar, fill out the Russian-localized form, and submit.
+6.  **Finalizes**: Upon submission, the row in Sheets is updated with revenue data, and the Calendar event is marked as **"✅ Form Completed"**.
 
 ---
 
@@ -20,7 +21,7 @@ The system automates the tracking of revenue by pre-preparing the reporting infr
 
 ```
 ┌─────────────────┐
-│ Google Calendar │ <───┐ 1. Fetch Tomorrow's Jobs (9 AM)
+│ Google Calendar │ <───┐ 1. Fetch Tomorrow's + Yesterday's Jobs (9 AM)
 └─────────────────┘     │ 3. Add Form Link to Description
          │              │ 5. Mark "Completed" on Submit
          ▼              │
@@ -55,7 +56,7 @@ The form is fully translated to Russian for the crew's convenience:
 - `Остаток` (Net Revenue)
 
 ### 4. Smart Scheduling
-- **9:00 AM**: Pre-population run (prepares tomorrow's jobs).
+- **9:00 AM**: Pre-population run (prepares tomorrow's jobs + reconciles yesterday's jobs).
 - **9:00 PM**: Reminder check (detects if any reports for *today* are still missing).
 
 ---
@@ -102,5 +103,5 @@ The app is hosted on **Railway** and connects to the **Splendid Moving** Google 
 
 ---
 
-**Last Updated**: February 1, 2026
+**Last Updated**: February 23, 2026
 

@@ -162,30 +162,38 @@ class SheetsService:
             # Header
             summary_data = [
                 ["GLOBAL REVENUE HISTORY"],
-                ["Month", "Total Revenue", "Net Revenue", "Yelp Revenue", "Google LSA Revenue"],
+                ["Month", "Total Revenue", "Net Revenue", "Yelp Revenue", "Google LSA Revenue", "Yelp Jobs", "Google LSA Jobs", "Other Jobs", "Total Jobs"],
             ]
             
             # Rows for each month
             for sheet in monthly_sheets:
                 # Using formulas is better so it updates live
-                # E: Total, F: Net, I: Source
+                # Monthly sheet columns — E: Total, F: Net, I: Source
                 row = [
                     sheet, 
                     f"=SUM('{sheet}'!E3:E)", 
                     f"=SUM('{sheet}'!F3:F)",
                     f"=SUMIF('{sheet}'!I3:I, \"Yelp\", '{sheet}'!E3:E)",
-                    f"=SUMIF('{sheet}'!I3:I, \"Google LSA\", '{sheet}'!E3:E)"
+                    f"=SUMIF('{sheet}'!I3:I, \"Google LSA\", '{sheet}'!E3:E)",
+                    f"=COUNTIF('{sheet}'!I3:I, \"Yelp\")",
+                    f"=COUNTIF('{sheet}'!I3:I, \"Google LSA\")",
+                    f"=COUNTA('{sheet}'!B3:B)-COUNTIF('{sheet}'!I3:I, \"Yelp\")-COUNTIF('{sheet}'!I3:I, \"Google LSA\")",
+                    f"=COUNTA('{sheet}'!B3:B)",
                 ]
                 summary_data.append(row)
                 
             # Grand Total Row
-            summary_data.append(["", "", "", "", ""]) # Spacer
+            summary_data.append(["", "", "", "", "", "", "", "", ""]) # Spacer
             summary_data.append([
                 "GRAND TOTAL", 
                 f"=SUM(B3:B{len(summary_data)})", 
                 f"=SUM(C3:C{len(summary_data)})",
                 f"=SUM(D3:D{len(summary_data)})",
-                f"=SUM(E3:E{len(summary_data)})"
+                f"=SUM(E3:E{len(summary_data)})",
+                f"=SUM(F3:F{len(summary_data)})",
+                f"=SUM(G3:G{len(summary_data)})",
+                f"=SUM(H3:H{len(summary_data)})",
+                f"=SUM(I3:I{len(summary_data)})",
             ])
             
             # Write to Summary Sheet
@@ -256,10 +264,12 @@ class SheetsService:
     def create_job_row(self, date_str, job_id, summary, source):
         """
         Creates a pre-populated row for a job with blank revenue fields.
-        Used by the 7 PM pre-population job.
+        Used by the 9 AM pre-population job.
         Returns the row number where the job was inserted.
         """
-        sheet_name = self.get_monthly_sheet_name()
+        # Derive sheet name from the job's date (handles cross-month reconciliation)
+        job_date = datetime.strptime(date_str, "%Y-%m-%d")
+        sheet_name = job_date.strftime("%b %Y")
         self.ensure_sheet_exists(sheet_name)
         
         # Row: [Date, Job ID, Summary, Status, Total Revenue, Net Revenue, Payment Type, Submitted At, Source]
