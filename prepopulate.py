@@ -4,7 +4,7 @@ Pre-Population & Reconciliation Script
 
 Run daily at 9 AM to:
 1. Fetch tomorrow's jobs from Calendar → create rows + form URLs
-2. Reconcile yesterday's jobs → backfill any that were missed
+2. Reconcile yesterday's and today's jobs → backfill any that were missed
 """
 
 import os

@@ -264,37 +264,64 @@ class SheetsService:
     def create_job_row(self, date_str, job_id, summary, source):
         """
         Creates a pre-populated row for a job with blank revenue fields.
-        Used by the 9 AM pre-population job.
+        Inserts in date-sorted order so reconciled past jobs appear with their date group.
         Returns the row number where the job was inserted.
         """
+        import re as _re
+
         # Derive sheet name from the job's date (handles cross-month reconciliation)
         job_date = datetime.strptime(date_str, "%Y-%m-%d")
         sheet_name = job_date.strftime("%b %Y")
         self.ensure_sheet_exists(sheet_name)
-        
+
         # Row: [Date, Job ID, Summary, Status, Total Revenue, Net Revenue, Payment Type, Submitted At, Source]
-        # Status, revenues, payment, submitted_at are blank (to be filled by form)
-        # Use None for empty fields so they stay blank in sheets (better for sum formulas)
         row = [date_str, job_id, summary, "", None, None, "", "", source]
-        
-        result = self.service.spreadsheets().values().append(
+
+        # Find the correct insertion point (date-sorted, after header rows 1-2)
+        result = self.service.spreadsheets().values().get(
             spreadsheetId=self.spreadsheet_id,
-            range=f"'{sheet_name}'!A1",
+            range=f"'{sheet_name}'!A:A"
+        ).execute()
+        dates = result.get('values', [])
+
+        # Find insert position: after the last row whose date <= date_str
+        # Rows 0,1 are header/totals, data starts at index 2 (sheet row 3)
+        insert_idx = len(dates)  # default: append at end
+        for i in range(2, len(dates)):
+            cell = dates[i][0] if dates[i] else ""
+            if cell > date_str:
+                insert_idx = i
+                break
+
+        sheet_row = insert_idx + 1  # 1-indexed sheet row number
+        sheet_id = self._get_sheet_id(sheet_name)
+
+        # Insert a blank row at the correct position
+        self.service.spreadsheets().batchUpdate(
+            spreadsheetId=self.spreadsheet_id,
+            body={'requests': [{
+                'insertDimension': {
+                    'range': {
+                        'sheetId': sheet_id,
+                        'dimension': 'ROWS',
+                        'startIndex': insert_idx,   # 0-indexed
+                        'endIndex': insert_idx + 1
+                    },
+                    'inheritFromBefore': False
+                }
+            }]}
+        ).execute()
+
+        # Write data into the newly inserted row
+        self.service.spreadsheets().values().update(
+            spreadsheetId=self.spreadsheet_id,
+            range=f"'{sheet_name}'!A{sheet_row}:I{sheet_row}",
             valueInputOption='USER_ENTERED',
             body={'values': [row]}
         ).execute()
-        
-        # Extract row number from updatedRange (e.g., "'Jan 2026'!A5:I5" -> 5)
-        updated_range = result.get('updates', {}).get('updatedRange', '')
-        row_num = None
-        if updated_range:
-            import re
-            match = re.search(r'!A(\d+):', updated_range)
-            if match:
-                row_num = int(match.group(1))
-        
-        print(f"Created pre-populated row for job {job_id} at row {row_num}")
-        return row_num
+
+        print(f"Created pre-populated row for job {job_id} at row {sheet_row}")
+        return sheet_row
 
     def get_job_by_id(self, job_id, sheet_name=None):
         """
