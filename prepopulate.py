@@ -10,7 +10,7 @@ Run daily at 9 AM to:
 import os
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from services.calendar import get_tomorrows_jobs, get_yesterdays_jobs, update_event_description
+from services.calendar import get_todays_jobs, get_tomorrows_jobs, get_yesterdays_jobs, update_event_description
 from services.sheets import SheetsService
 from utils.logger import log_info, log_error, log_warning
 
@@ -79,7 +79,24 @@ def main():
     else:
         log_info("No jobs found for tomorrow.")
 
-    # ── 2. Reconcile yesterday's jobs ────────────────────────────
+    # ── 2. Reconcile today's jobs ─────────────────────────────────
+    today = datetime.now(la_tz)
+    today_str = today.strftime("%Y-%m-%d")
+
+    log_info(f"Reconciling today's jobs for: {today_str}")
+    today_jobs = get_todays_jobs()
+
+    if today_jobs:
+        log_info(f"Found {len(today_jobs)} jobs for today in calendar")
+        added = process_jobs(today_jobs, today_str, base_url, sheets, label="today")
+        if added > 0:
+            log_info(f"Today reconciliation: {added} missing jobs backfilled")
+        else:
+            log_info("Today reconciliation: all jobs already in sheet ✓")
+    else:
+        log_info("No jobs found for today in calendar.")
+
+    # ── 3. Reconcile yesterday's jobs ────────────────────────────
     yesterday = datetime.now(la_tz) - timedelta(days=1)
     yesterday_str = yesterday.strftime("%Y-%m-%d")
 
