@@ -86,26 +86,30 @@ class SheetsService:
 
     def append_job_data(self, job_report_list):
         """
-        Appends a list of job reports to the month's sheet.
+        Appends a list of job reports to the correct month's sheet.
+        Derives the sheet from the date in the first row of data.
         """
         if not job_report_list:
             return
 
-        sheet_name = self.get_monthly_sheet_name()
+        # Derive sheet from the date in the first row (column A) if available
+        first_date = job_report_list[0][0] if job_report_list[0] else None
+        if first_date:
+            try:
+                job_date = datetime.strptime(first_date, "%Y-%m-%d")
+                sheet_name = job_date.strftime("%b %Y")
+            except (ValueError, TypeError):
+                sheet_name = self.get_monthly_sheet_name()
+        else:
+            sheet_name = self.get_monthly_sheet_name()
+
         self.ensure_sheet_exists(sheet_name)
-        
-        range_name = f"'{sheet_name}'!A1" 
-        value_input_option = 'USER_ENTERED'
-        
-        body = {
-            'values': job_report_list
-        }
         
         result = self.service.spreadsheets().values().append(
             spreadsheetId=self.spreadsheet_id,
-            range=range_name,
-            valueInputOption=value_input_option,
-            body=body
+            range=f"'{sheet_name}'!A1",
+            valueInputOption='USER_ENTERED',
+            body={'values': job_report_list}
         ).execute()
         
         print(f"{result.get('updates').get('updatedCells')} cells appended to {sheet_name}.")

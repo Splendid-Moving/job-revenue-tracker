@@ -24,35 +24,45 @@ def process_jobs(jobs, date_str, base_url, sheets, label=""):
 
     Returns the number of newly added jobs.
     """
+    from datetime import datetime as _dt
     added = 0
 
+    # Derive the target sheet name so we only search that one tab
+    job_date = _dt.strptime(date_str, "%Y-%m-%d")
+    target_sheet = job_date.strftime("%b %Y")
+
     for job in jobs:
-        job_id = job['id']
-        summary = job['summary']
-        source = job.get('source', 'Other')
+        try:
+            job_id = job['id']
+            summary = job['summary']
+            source = job.get('source', 'Other')
 
-        # Check if job already exists in sheet (avoid duplicates)
-        existing_row, _, _ = sheets.get_job_by_id(job_id)
-        if existing_row:
-            log_info(f"[{label}] Job {job_id} already in sheet. Skipping.")
+            # Check if job already exists — scoped to the target month's sheet only
+            existing_row, _, _ = sheets.get_job_by_id(job_id, sheet_name=target_sheet)
+            if existing_row:
+                log_info(f"[{label}] Job {job_id} already in sheet. Skipping.")
+                continue
+
+            # Create blank row in Sheets
+            sheets.create_job_row(
+                date_str=date_str,
+                job_id=job_id,
+                summary=summary,
+                source=source
+            )
+
+            # Generate form URL
+            form_url = f"{base_url}/?job_id={job_id}&date={date_str}"
+
+            # Update calendar event with form URL
+            update_event_description(job_id, form_url)
+
+            log_info(f"[{label}] Pre-populated job: {summary}")
+            added += 1
+
+        except Exception as e:
+            log_error(f"[{label}] Failed to process job {job.get('id', '?')}: {e}")
             continue
-
-        # Create blank row in Sheets
-        sheets.create_job_row(
-            date_str=date_str,
-            job_id=job_id,
-            summary=summary,
-            source=source
-        )
-
-        # Generate form URL
-        form_url = f"{base_url}/?job_id={job_id}&date={date_str}"
-
-        # Update calendar event with form URL
-        update_event_description(job_id, form_url)
-
-        log_info(f"[{label}] Pre-populated job: {summary}")
-        added += 1
 
     return added
 
