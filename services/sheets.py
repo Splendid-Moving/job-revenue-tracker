@@ -297,6 +297,12 @@ class SheetsService:
                 insert_idx = i
                 break
 
+        # Guard: never insert at index 2 (row 3 boundary) as it can break
+        # the SUM formulas in row 2 that reference E3:E, F3:F.
+        # Instead, insert at index 3 (row 4) and the job will still be date-sorted.
+        if insert_idx <= 2:
+            insert_idx = 2  # will be at the top of data, but safe
+
         sheet_row = insert_idx + 1  # 1-indexed sheet row number
         sheet_id = self._get_sheet_id(sheet_name)
 
